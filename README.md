@@ -271,9 +271,10 @@ MIT License - feel free to use this for personal and commercial projects.
 ## Author
 
 **Your Name**
-- GitHub: [tusharpatange18-beep](https://github.com/tusharpatange18-beep)
-- Email: [EMAIL_ADDRESS](tusharpatange18@gmail.com)
-- LinkedIn: [https://www.linkedin.com/in/yourprofile](https://www.linkedin.com/in/tushar-patange-3851aa327/)
+- GitHub: (https://github.com/tusharpatange18-beep)
+- Email: tusharpatange18@gmail.com
+- LinkedIn: (https://www.linkedin.com/in/tushar-patange-3851aa327/)
+
 
 ---
 
@@ -283,4 +284,4 @@ Have questions or found an issue? Open an issue on GitHub or email me.
 
 ---
 
-Made with ❤️ by [Tushar Patange](https://github.com/tusharpatange18-beep)
+Made with by [Tushar Patange](https://github.com/tusharpatange18-beep)

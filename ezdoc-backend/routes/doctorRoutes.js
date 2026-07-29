@@ -5,7 +5,7 @@ const {
     addDoctor,
     getDoctorById,
     setAvailability,
-} = require('../controllers/doctorController');
+} = require('../controllers/doctorcontroller');
 
 // GET  /api/doctors              → list all available doctors (supports ?specialization & ?location)
 // POST /api/doctor               → add a doctor (admin/seed)

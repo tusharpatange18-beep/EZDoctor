@@ -1,94 +1,70 @@
 # EZDoctor
 
-A full-stack healthcare web application with emergency SOS, real-time ambulance tracking, doctor discovery, and appointment booking.
+A full-stack emergency medical assistance web app for rural areas: one-tap SOS with GPS location, AI-assisted triage, automatic ambulance assignment, live tracking on a map, and doctor discovery with appointment booking.
 
-**Live**: [Frontend](https://ezdoctor.vercel.app) | [Backend](https://ezdoctor-api.onrender.com)
+**Live demo:** [ezdoctor.vercel.app](https://ezdoctor.vercel.app)
 
 ---
 
 ## Features
 
-### 🚨 Emergency Management
-- One-tap SOS with GPS location
-- Real-time ambulance tracking via Socket.io
-- Smart ambulance assignment using Haversine algorithm
-- Live map updates
-- Emergency history tracking
+### 🚨 Emergency SOS
+- One-tap SOS that sends the patient's GPS location and symptoms
+- **AI triage with Google Gemini**: each SOS is classified as high, medium or low priority with a short label, so doctors see the most urgent cases first (falls back gracefully when no API key is set)
+- Automatic assignment of the nearest available ambulance (Haversine great-circle distance) when a doctor accepts the request
+- Request lifecycle: `pending → accepted → on_the_way → arrived → completed`; the ambulance is released when the request completes
 
-### 🏥 Doctor Discovery & Booking
-- Search and filter doctors by specialty, location, ratings
-- View detailed doctor profiles
-- Browse available time slots and book appointments
-- Reschedule and cancel appointments
-- Patient reviews and ratings
+### 🗺️ Real-Time Tracking
+- Socket.io pushes request and location updates to every connected client instantly
+- Patients follow the doctor and ambulance on a live Leaflet map
+- Doctor movement can be simulated from the dashboard for demos
 
-### 👤 User Management
-- Role-based access (Patient, Doctor, Admin)
-- Secure JWT authentication
-- Profile management
-- Multi-device login support
+### 🏥 Doctors and Appointments
+- Browse doctors, search by name, specialization or location, and filter by specialization
+- Doctor profiles with ratings and availability
+- Book appointments, view your appointment history, and cancel bookings
 
-### 📊 Admin Dashboard
-- Real-time analytics and statistics
-- User and appointment management
-- Emergency incident tracking
-- System monitoring
-
-### 🔔 Notifications
-- Toast notifications for actions
-- Email confirmations and alerts
-- Real-time ambulance status updates
+### 👤 Users and Roles
+- Register and log in with JWT authentication; passwords hashed with bcrypt
+- Three roles (Patient, Doctor, Admin), each with its own protected routes and dashboard
+- Admin panel listing all emergency requests with live status updates
 
 ---
 
 ## Tech Stack
 
-**Frontend**
-- React 18+ (Vite)
-- Tailwind CSS
-- React Router
-- Axios
-- Socket.io-client
-- React Leaflet
-
-**Backend**
-- Node.js + Express.js
-- MongoDB with Mongoose
-- Socket.io
-- JWT authentication
-- Nodemailer
-
-**Deployment**
-- Frontend: Vercel
-- Backend: Render
-- Database: MongoDB Atlas
+| Layer | Technologies |
+|---|---|
+| Frontend | React 19, Vite, Tailwind CSS, React Router 7, React Leaflet, Socket.io-client, Lucide icons |
+| Backend | Node.js, Express 5, Socket.io, JWT, bcryptjs |
+| Database | MongoDB Atlas with Mongoose |
+| AI | Google Gemini (`@google/generative-ai`) for emergency triage |
+| Deployment | Vercel (frontend), Render (backend), MongoDB Atlas |
 
 ---
 
 ## Project Structure
 
 ```
-ezdoctor/
-├── frontend/
-│   ├── src/
-│   │   ├── components/       # React components
-│   │   ├── pages/            # Route pages
-│   │   ├── services/         # API & Socket handlers
-│   │   ├── hooks/            # Custom hooks
-│   │   ├── context/          # State management
-│   │   └── utils/            # Helper functions
-│   └── package.json
-│
-├── backend/
-│   ├── models/               # MongoDB schemas
-│   ├── routes/               # API routes
-│   ├── middleware/           # Express middleware
-│   ├── services/             # Business logic
-│   ├── socket/               # Socket.io handlers
-│   ├── config/               # Configuration
-│   └── package.json
-│
-└── README.md
+EZDoctor/
+├── src/                      # React frontend
+│   ├── api/                  # API calls (auth, requests)
+│   ├── components/           # common/ (Navbar, Toast, ProtectedRoute) and ui/
+│   ├── constants/            # status config, static data
+│   ├── context/              # AuthContext
+│   ├── hooks/                # useSocket
+│   └── pages/                # Home, SOS, PatientTracking, Doctors, MyAppointments,
+│                             # DoctorDashboard, AdminPanel, Login, Register
+├── ezdoc-backend/            # Express backend
+│   ├── config/               # MongoDB connection
+│   ├── controllers/          # auth, doctors, appointments, SOS requests
+│   ├── middleware/           # JWT auth
+│   ├── models/               # User, Doctor, Appointment, Request, Ambulance
+│   ├── routes/
+│   ├── scripts/              # seed and maintenance scripts
+│   ├── utils/                # Haversine distance, nearest-ambulance lookup
+│   └── server.js             # Express + Socket.io server
+└── package.json              # frontend
 ```
 
 ---
@@ -97,66 +73,47 @@ ezdoctor/
 
 ### Prerequisites
 - Node.js 18+
-- MongoDB account
-- Git
+- A MongoDB Atlas cluster (or a local MongoDB)
+- Optional: a Google Gemini API key for AI triage
 
-### Setup
-
-**1. Clone the repo**
+### 1. Clone
 ```bash
-git clone https://github.com/yourusername/ezdoctor.git
-cd ezdoctor
+git clone https://github.com/tusharpatange18-beep/EZDoctor.git
+cd EZDoctor
 ```
 
-**2. Backend Setup**
+### 2. Backend
 ```bash
-cd backend
+cd ezdoc-backend
+npm install
+cp .env.example .env      # then fill in your values
+node seed.js              # optional: seed sample data
+npm run dev               # http://localhost:5000
+```
+
+### 3. Frontend
+```bash
+cd ..
 npm install
 cp .env.example .env
-# Edit .env with your credentials
-npm run dev
+npm run dev               # http://localhost:5173
 ```
-
-**3. Frontend Setup**
-```bash
-cd ../frontend
-npm install
-cp .env.example .env
-# Edit .env with API URL
-npm run dev
-```
-
-Open `http://localhost:5173` in your browser.
 
 ---
 
 ## Environment Variables
 
-### Backend (.env)
+**Backend (`ezdoc-backend/.env`)**
 ```env
 PORT=5000
-NODE_ENV=development
-
-# Database
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/ezdoctor
-
-# Authentication
-JWT_SECRET=your_secret_key_min_32_chars
-JWT_REFRESH_SECRET=your_refresh_secret
-JWT_EXPIRE=7d
-
-# Email Service
-EMAIL_SERVICE=gmail
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-
-# CORS
-CORS_ORIGIN=http://localhost:5173,https://yourdomain.com
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<dbname>
+JWT_SECRET=your_jwt_secret
+GEMINI_API_KEY=your_gemini_api_key   # optional; triage is skipped without it
 ```
 
-### Frontend (.env)
+**Frontend (`.env`)**
 ```env
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE=http://localhost:5000/api
 VITE_SOCKET_URL=http://localhost:5000
 ```
 
@@ -165,123 +122,59 @@ VITE_SOCKET_URL=http://localhost:5000
 ## API Endpoints
 
 ```
-Authentication
+Auth
 POST   /api/auth/register
 POST   /api/auth/login
-POST   /api/auth/refresh-token
+GET    /api/auth/me                         (JWT)
 
 Doctors
 GET    /api/doctors
-GET    /api/doctors/:id
-GET    /api/doctors/search
+GET    /api/doctor/:id
+POST   /api/doctor
+PATCH  /api/doctor/:id/availability
 
-Appointments
+Appointments                                (JWT)
 POST   /api/appointments
-GET    /api/appointments
-PUT    /api/appointments/:id
-DELETE /api/appointments/:id
+GET    /api/appointments/my
+PATCH  /api/appointments/:id/cancel
 
-Emergency
-POST   /api/emergency/sos
-GET    /api/emergency/:id
-PUT    /api/emergency/:id/status
-
-Admin
-GET    /api/admin/dashboard
-GET    /api/admin/users
-POST   /api/admin/users
-DELETE /api/admin/users/:id
+Emergency SOS
+POST   /api/sos
+GET    /api/requests
+GET    /api/request/:id
+PUT    /api/request/:id                     accept + assign nearest ambulance
+PUT    /api/request/:id/location            doctor location update
+PUT    /api/request/:id/ambulance-location
+PUT    /api/request/:id/status
 ```
+
+Socket.io events emitted by the server: `requestUpdate`, `locationUpdate`.
 
 ---
 
-## How It Works
+## How the SOS Flow Works
 
-### Emergency SOS
-1. User clicks SOS button
-2. Browser gets GPS location
-3. Backend finds nearest ambulance using Haversine algorithm
-4. Ambulance location tracked in real-time via Socket.io
-5. Live map shows ambulance approaching
-
-### Doctor Booking
-1. User searches for doctors
-2. Filters by specialty, location, ratings
-3. Views available time slots
-4. Books appointment
-5. Gets email confirmation
-
-### Real-Time Updates
-- Socket.io maintains persistent connection
-- Ambulance location updates every 2 seconds
-- Appointment status changes sent instantly
-- Admin dashboard updates in real-time
-
----
-
-## Deployment
-
-### Frontend (Vercel)
-```bash
-vercel link
-vercel deploy --prod
-```
-
-### Backend (Render)
-- Connect GitHub repository
-- Set root directory to `backend`
-- Add environment variables
-- Build: `npm install`
-- Start: `npm start`
-
-### Database (MongoDB Atlas)
-- Create a free cluster
-- Whitelist your IP address
-- Get connection URI and add to `.env`
+1. The patient presses SOS; the browser reads their GPS location.
+2. The backend sends the emergency type and symptoms to Gemini, which returns a priority level and label.
+3. The request is saved as `pending` and broadcast to doctors over Socket.io.
+4. A doctor accepts; the backend picks the nearest `available` ambulance by Haversine distance, marks it `busy` and attaches it to the request.
+5. Location updates are broadcast as they arrive, and the patient's map moves in real time.
+6. When the request is `completed`, the ambulance becomes `available` again.
 
 ---
 
 ## Future Improvements
 
-- Video consultation feature
-- AI-powered symptom checker
-- Mobile app (React Native)
-- Payment integration (Stripe)
-- Prescription management
-- Multi-language support
-
----
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m 'Add feature'`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
-
----
-
-## License
-
-MIT License - feel free to use this for personal and commercial projects.
+- Real GPS streaming from the ambulance or driver device
+- SMS alerts for SOS events
+- Appointment rescheduling and reviews
+- Video consultation and multi-language support
 
 ---
 
 ## Author
 
-**Your Name**
-- GitHub: (https://github.com/tusharpatange18-beep)
+**Tushar Patange**
+- GitHub: [tusharpatange18-beep](https://github.com/tusharpatange18-beep)
+- LinkedIn: [tushar-patange](https://www.linkedin.com/in/tushar-patange-3851aa327/)
 - Email: tusharpatange18@gmail.com
-- LinkedIn: (https://www.linkedin.com/in/tushar-patange-3851aa327/)
-
-
----
-
-## Support
-
-Have questions or found an issue? Open an issue on GitHub or email me.
-
----
-
-Made with by [Tushar Patange](https://github.com/tusharpatange18-beep)

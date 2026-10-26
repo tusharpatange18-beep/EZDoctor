@@ -33,3 +33,6 @@ pnpm-debug.log*
 *.sln
 *.sw?
 Thumbs.db
+
+# Personal notes (contain credentials)
+EZdoc.txt

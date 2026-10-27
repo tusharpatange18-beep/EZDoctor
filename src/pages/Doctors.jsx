@@ -3,6 +3,7 @@ import { MapPin, Briefcase, Phone, Search, SlidersHorizontal, Calendar, Clock, C
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/common/Toast';
+import { saveDoctors, loadDoctors } from '../offline/db';
 
 const API = import.meta.env.VITE_API_BASE;
 
@@ -143,6 +144,7 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
         if (!time)  { setError('Please select a time slot'); return; }
         setError('');
         setLoading(true);
+        setStep('success'); // optimistic: confirm instantly, roll back on failure
 
         try {
             const res = await fetch(`${API}/appointments`, {
@@ -157,15 +159,15 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
             const data = await res.json();
 
             if (!res.ok) {
-                setError(data.message || 'Booking failed. Try again.');
-                setLoading(false);
+                setStep('form');
+                setError(data.message || 'Booking failed. Your appointment was not saved.');
                 return;
             }
 
-            setStep('success');
             onSuccess(data.appointment);
         } catch {
-            setError('Network error — is the backend running?');
+            setStep('form');
+            setError('No connection. Your appointment was not saved, please try again.');
         } finally {
             setLoading(false);
         }
@@ -196,8 +198,8 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
                             <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {date}</span>
                             <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {time}</span>
                         </p>
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 text-emerald-700 text-sm font-semibold mb-4 flex items-center justify-center gap-2">
-                            <CheckCircle className="w-4 h-4" /> Saved to your appointments
+                        <div role="status" className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 text-emerald-700 text-sm font-semibold mb-4 flex items-center justify-center gap-2">
+                            <CheckCircle className="w-4 h-4" aria-hidden="true" /> {loading ? 'Saving to your appointments…' : 'Saved to your appointments'}
                         </div>
                         <button
                             onClick={onClose}
@@ -326,13 +328,29 @@ const Doctors = () => {
     const [search, setSearch]           = useState('');
     const [activeSpec, setActiveSpec]   = useState('All');
     const [selectedDoctor, setSelectedDoctor] = useState(null);
+    const [savedAt, setSavedAt]         = useState(null); // set when showing offline copy
 
     // ── Fetch available doctors
     useEffect(() => {
         fetch(`${API}/doctors`)
             .then(res => { if (!res.ok) throw new Error('Failed to load doctors'); return res.json(); })
-            .then(data => { setDoctors(Array.isArray(data) ? data : []); setLoading(false); })
-            .catch(err => { setError(err.message); setLoading(false); });
+            .then(data => {
+                const list = Array.isArray(data) ? data : [];
+                setDoctors(list);
+                setLoading(false);
+                saveDoctors(list).catch(() => {}); // keep a copy for offline use
+            })
+            .catch(async err => {
+                // Offline or server down: fall back to the last list we saved
+                const saved = await loadDoctors().catch(() => null);
+                if (saved?.doctors?.length) {
+                    setDoctors(saved.doctors);
+                    setSavedAt(saved.savedAt);
+                } else {
+                    setError(err.message);
+                }
+                setLoading(false);
+            });
     }, []);
 
     // ── Filter logic
@@ -404,6 +422,13 @@ const Doctors = () => {
                         </button>
                     ))}
                 </div>
+
+                {/* ── Offline copy notice */}
+                {savedAt && (
+                    <p role="status" className="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-4 py-2">
+                        You're offline. Showing doctors saved on {new Date(savedAt).toLocaleString()}.
+                    </p>
+                )}
 
                 {/* ── Result count */}
                 {!loading && !error && (

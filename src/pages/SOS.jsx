@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, MapPin, Loader } from "lucide-react";
+import { AlertCircle, MapPin, Loader, WifiOff, Phone } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast, ToastContainer } from "../components/common/Toast";
 import { createSOS } from "../api/requests";
+import { enqueueSOS } from "../offline/db";
+import { SOS_SENT_EVENT } from "../offline/sosQueue";
 
 const SOS = () => {
   const navigate = useNavigate();
@@ -18,6 +20,14 @@ const SOS = () => {
   });
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [queued, setQueued] = useState(false);
+
+  // A queued SOS is sent automatically when the connection returns (see OfflineBanner)
+  useEffect(() => {
+    const onSent = () => navigate("/track");
+    window.addEventListener(SOS_SENT_EVENT, onSent);
+    return () => window.removeEventListener(SOS_SENT_EVENT, onSent);
+  }, [navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -50,17 +60,37 @@ const SOS = () => {
     e.preventDefault();
     setLoading(true);
 
+    let location;
     try {
       showToast("Getting your GPS location...", "info");
-      const location = await getLocation();
+      location = await getLocation();
       showToast(`Location found: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`, "success", 2000);
+    } catch (error) {
+      showToast(error.code === 1 ? "Location access denied. Please allow GPS." : "Could not get your location. Please try again.", "error");
+      setLoading(false);
+      return;
+    }
 
-      const { ok, data } = await createSOS({
-        patientName: formData.name,
-        location,
-        symptoms: formData.symptoms,
-        type: formData.type,
-      }, token);
+    const payload = {
+      patientName: formData.name,
+      location,
+      symptoms: formData.symptoms,
+      type: formData.type,
+    };
+
+    // No connection: keep the SOS on the device and send it on reconnect
+    const queueForLater = async () => {
+      await enqueueSOS(payload, token);
+      setQueued(true);
+    };
+
+    try {
+      if (!navigator.onLine) {
+        await queueForLater();
+        return;
+      }
+
+      const { ok, data } = await createSOS(payload, token);
 
       if (!ok) {
         showToast(data.message || "Failed to send SOS", "error");
@@ -73,13 +103,9 @@ const SOS = () => {
       setTimeout(() => navigate("/track"), 1200);
 
       setFormData({ name: user?.name || "", phone: "", type: "Accident", symptoms: "" });
-    } catch (error) {
-      console.error(error);
-      if (error.code === 1) {
-        showToast("Location access denied. Please allow GPS.", "error");
-      } else {
-        showToast("Failed to send SOS. Check your connection.", "error");
-      }
+    } catch {
+      // fetch throws only on network failure
+      await queueForLater();
     } finally {
       setLoading(false);
     }
@@ -109,6 +135,24 @@ const SOS = () => {
           </div>
         )}
 
+        {queued ? (
+          <div role="alert" className="space-y-4 text-center">
+            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+              <WifiOff className="w-7 h-7 text-gray-700" aria-hidden="true" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">No connection: SOS saved</h2>
+            <p className="text-sm text-gray-600">
+              Your SOS and GPS location are saved on this device and will be sent automatically
+              the moment you're back online. Keep this page open.
+            </p>
+            <a
+              href="tel:108"
+              className="w-full py-3 rounded-xl text-white font-bold bg-red-600 hover:bg-red-700 transition flex items-center justify-center gap-2"
+            >
+              <Phone className="w-4 h-4" aria-hidden="true" /> Life-threatening? Call 108 now
+            </a>
+          </div>
+        ) : (
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Name */}
           <div>
@@ -188,6 +232,7 @@ const SOS = () => {
             )}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

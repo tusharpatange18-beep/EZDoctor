@@ -36,6 +36,9 @@ const MyAppointments = () => {
     const handleCancel = async (id) => {
         if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
         
+        // Optimistic: mark cancelled immediately, restore the original if the server fails
+        const original = appointments.find(app => app._id === id);
+        setAppointments(prev => prev.map(app => app._id === id ? { ...app, status: 'cancelled' } : app));
         setCancelling(prev => ({ ...prev, [id]: true }));
         try {
             const res = await fetch(`${API_BASE}/appointments/${id}/cancel`, {
@@ -49,7 +52,8 @@ const MyAppointments = () => {
             setAppointments(prev => prev.map(app => app._id === id ? data.appointment : app));
             showToast('Appointment cancelled successfully', 'success');
         } catch (err) {
-            showToast(`${err.message}`, 'error');
+            setAppointments(prev => prev.map(app => app._id === id ? original : app));
+            showToast(err instanceof TypeError ? 'No connection. Your appointment is still booked.' : err.message, 'error');
         } finally {
             setCancelling(prev => ({ ...prev, [id]: false }));
         }

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import OfflineBanner from './OfflineBanner';
 import { Outlet, useLocation } from 'react-router-dom';
 
 const Layout = ({ children }) => {
@@ -22,6 +23,7 @@ const Layout = ({ children }) => {
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-white focus:text-red-700 focus:font-semibold focus:rounded-lg focus:shadow-lg">
         Skip to main content
       </a>
+      <OfflineBanner />
       <Navbar />
       <main id="main-content" ref={mainRef} tabIndex={-1} className="flex-grow focus:outline-none">
         {children || <Outlet />}

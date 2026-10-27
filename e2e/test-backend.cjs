@@ -3,7 +3,7 @@
  * in-memory MongoDB, seeded with demo doctors and one ambulance.
  * Used by Playwright's webServer, so E2E tests exercise the full stack.
  */
-const { MongoMemoryServer } = require('mongodb-memory-server');
+const { MongoMemoryServer } = require('mongodb-memory-server-core');
 
 const PORT = process.env.E2E_API_PORT || 5055;
 

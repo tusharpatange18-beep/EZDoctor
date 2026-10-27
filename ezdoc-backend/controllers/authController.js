@@ -29,7 +29,9 @@ const register = async (req, res) => {
             return res.status(409).json({ message: 'Email already registered' });
         }
 
-        const user = await User.create({ name, email, password, role: role || 'patient' });
+        // Self-registration can only create patients or doctors; admins are created manually
+        const safeRole = ['patient', 'doctor'].includes(role) ? role : 'patient';
+        const user = await User.create({ name, email, password, role: safeRole });
 
         const token = generateToken(user._id, user.role);
 

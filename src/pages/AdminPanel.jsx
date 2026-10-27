@@ -3,6 +3,7 @@ import { RefreshCw, Activity } from 'lucide-react';
 import { STATUS_CONFIG } from '../constants/status';
 import StatusBadge from '../components/ui/StatusBadge';
 import useSocket from '../hooks/useSocket';
+import upsertById from '../utils/upsertById';
 import { fetchAllRequests } from '../api/requests';
 
 const AdminPanel = () => {
@@ -28,8 +29,8 @@ const AdminPanel = () => {
 
     // Live updates via useSocket hook
     useSocket({
-        requestUpdate: (updated) => setRequests(prev => prev.map(r => r._id === updated._id ? updated : r)),
-        locationUpdate: (updated) => setRequests(prev => prev.map(r => r._id === updated._id ? updated : r)),
+        requestUpdate: (updated) => setRequests(prev => upsertById(prev, updated)),
+        locationUpdate: (updated) => setRequests(prev => upsertById(prev, updated)),
     });
 
 

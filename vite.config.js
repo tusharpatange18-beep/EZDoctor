@@ -9,6 +9,12 @@ export default defineConfig({
     // `ANALYZE=1 npm run build` writes dist/stats.html (bundle treemap)
     process.env.ANALYZE && visualizer({ filename: 'dist/stats.html', gzipSize: true }),
   ],
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.test.{js,jsx}', 'ezdoc-backend/**/*.test.js'],
+    env: { VITE_API_BASE: 'http://api.test/api', VITE_SOCKET_URL: 'http://api.test' },
+  },
   build: {
     rollupOptions: {
       output: {

@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { MapPin, Briefcase, Phone, Search, SlidersHorizontal, Calendar, Clock, CheckCircle, X, User, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/common/Toast';
 
@@ -22,16 +22,16 @@ const Stars = ({ rating = 4.5 }) => {
     const empty = 5 - full;
     return (
         <span className="flex items-center gap-0.5 text-amber-400 text-xs">
-            {'★'.repeat(full)}
-            <span className="text-gray-300">{'★'.repeat(empty)}</span>
-            <span className="ml-1 text-gray-600 font-semibold">{Number(rating).toFixed(1)}</span>
+            <span aria-hidden="true">{'★'.repeat(full)}</span>
+            <span className="text-gray-300" aria-hidden="true">{'★'.repeat(empty)}</span>
+            <span className="sr-only">Rated {Number(rating).toFixed(1)} out of 5</span>
+            <span className="ml-1 text-gray-600 font-semibold" aria-hidden="true">{Number(rating).toFixed(1)}</span>
         </span>
     );
 };
 
 // ─── Single doctor card ───────────────────────────────────────
 const DoctorCard = ({ doctor, onBook }) => {
-    const initials = doctor.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2);
     return (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex flex-col overflow-hidden">
             <div className="h-2 bg-gradient-to-r from-red-400 to-rose-500" />
@@ -40,13 +40,13 @@ const DoctorCard = ({ doctor, onBook }) => {
                 <div className="flex items-start gap-4 mb-4">
                     <div className="w-14 h-14 rounded-2xl bg-red-50 text-2xl flex items-center justify-center flex-shrink-0 border border-red-100 overflow-hidden">
                         {doctor.photo && doctor.photo.startsWith('http') ? (
-                            <img src={doctor.photo} alt={doctor.name} className="w-full h-full object-cover" />
+                            <img src={doctor.photo} alt={doctor.name} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                         ) : (
                             <User className="w-7 h-7 text-red-400" />
                         )}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h3 className="text-base font-bold text-gray-900 leading-tight truncate">{doctor.name}</h3>
+                        <h2 className="text-base font-bold text-gray-900 leading-tight truncate">{doctor.name}</h2>
                         <p className="text-sm text-red-600 font-medium mt-0.5">{doctor.specialization}</p>
                         <Stars rating={doctor.rating} />
                     </div>
@@ -74,7 +74,8 @@ const DoctorCard = ({ doctor, onBook }) => {
                 </div>
                 <button
                     onClick={() => onBook(doctor)}
-                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white text-sm font-bold transition-all shadow-sm shadow-red-200 hover:-translate-y-0.5 active:translate-y-0"
+                    aria-label={`Book appointment with ${doctor.name}`}
+                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-sm font-bold transition-all shadow-sm shadow-red-200 hover:-translate-y-0.5 active:translate-y-0"
                 >
                     Book Appointment
                 </button>
@@ -118,10 +119,24 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
     const [step, setStep]     = useState('form');   // 'form' | 'success'
     const [loading, setLoading] = useState(false);
     const [error, setError]   = useState('');
+    const dialogRef = useRef(null);
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
+
+    // Move focus into the dialog, close on Escape, return focus on close
+    useEffect(() => {
+        const previouslyFocused = document.activeElement;
+        dialogRef.current?.focus();
+        const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('keydown', onKey);
+            previouslyFocused?.focus?.();
+        };
+    }, []);
 
     if (!doctor) return null;
 
-    const initials = doctor.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
     const handleConfirm = async () => {
         if (!date)  { setError('Please pick a date');  return; }
@@ -158,7 +173,14 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-fade-in">
+            <div
+                ref={dialogRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="booking-title"
+                tabIndex={-1}
+                className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-fade-in focus:outline-none"
+            >
 
                 {/* ── Success screen */}
                 {step === 'success' ? (
@@ -166,7 +188,7 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
                         <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                             <CheckCircle className="w-8 h-8 text-emerald-600" />
                         </div>
-                        <h2 className="text-xl font-bold text-gray-900 mb-1">Appointment Booked!</h2>
+                        <h2 id="booking-title" className="text-xl font-bold text-gray-900 mb-1" aria-live="polite">Appointment Booked!</h2>
                         <p className="text-gray-500 text-sm mb-1">
                             <span className="font-semibold text-gray-700">{doctor.name}</span> · {doctor.specialization}
                         </p>
@@ -192,17 +214,17 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
                             <div className="flex items-center gap-3">
                                 <div className="w-11 h-11 rounded-2xl bg-red-50 flex items-center justify-center border border-red-100 overflow-hidden text-xl">
                                     {doctor.photo && doctor.photo.startsWith('http') ? (
-                                        <img src={doctor.photo} alt={doctor.name} className="w-full h-full object-cover" />
+                                        <img src={doctor.photo} alt={doctor.name} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                     ) : (
                                         <User className="w-6 h-6 text-red-400" />
                                     )}
                                 </div>
                                 <div>
-                                    <h2 className="text-base font-bold text-gray-900 leading-tight">{doctor.name}</h2>
+                                    <h2 id="booking-title" className="text-base font-bold text-gray-900 leading-tight">{doctor.name}</h2>
                                     <p className="text-xs text-red-600 font-medium">{doctor.specialization}</p>
                                 </div>
                             </div>
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition p-1">
+                            <button onClick={onClose} aria-label="Close booking dialog" className="text-gray-500 hover:text-gray-700 transition p-1">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -211,11 +233,12 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
                         <div className="p-6 space-y-5">
                             {/* Date picker */}
                             <div>
-                                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                                    <Calendar className="w-4 h-4 text-red-500" />
+                                <label htmlFor="booking-date" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                                    <Calendar className="w-4 h-4 text-red-500" aria-hidden="true" />
                                     Select Date
                                 </label>
                                 <input
+                                    id="booking-date"
                                     type="date"
                                     value={date}
                                     min={defaultDate}
@@ -227,19 +250,20 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
 
                             {/* Time slots */}
                             <div>
-                                <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
-                                    <Clock className="w-4 h-4 text-red-500" />
+                                <p id="time-slot-label" className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                                    <Clock className="w-4 h-4 text-red-500" aria-hidden="true" />
                                     Select Time Slot
-                                </label>
-                                <div className="grid grid-cols-3 gap-2">
+                                </p>
+                                <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="time-slot-label">
                                     {TIME_SLOTS.map(slot => (
                                         <button
                                             key={slot}
                                             type="button"
+                                            aria-pressed={time === slot}
                                             onClick={() => setTime(slot)}
                                             className={`py-2 px-2 rounded-xl text-xs font-semibold border transition-all
                                                 ${time === slot
-                                                    ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200'
+                                                    ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-200'
                                                     : 'bg-white text-gray-600 border-gray-200 hover:border-red-300 hover:text-red-500'
                                                 }`}
                                         >
@@ -251,10 +275,11 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
 
                             {/* Notes (optional) */}
                             <div>
-                                <label className="text-sm font-semibold text-gray-700 mb-2 block">
-                                    Notes <span className="text-gray-400 font-normal">(optional)</span>
+                                <label htmlFor="booking-notes" className="text-sm font-semibold text-gray-700 mb-2 block">
+                                    Notes <span className="text-gray-500 font-normal">(optional)</span>
                                 </label>
                                 <textarea
+                                    id="booking-notes"
                                     value={notes}
                                     onChange={e => setNotes(e.target.value)}
                                     placeholder="Describe your symptoms or reason for visit..."
@@ -266,7 +291,7 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
 
                             {/* Error */}
                             {error && (
-                                <p className="text-red-600 text-xs font-semibold flex items-center gap-1.5 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                                <p role="alert" className="text-red-700 text-xs font-semibold flex items-center gap-1.5 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
                                     <AlertCircle className="w-4 h-4" /> {error}
                                 </p>
                             )}
@@ -275,8 +300,8 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
                             <button
                                 onClick={handleConfirm}
                                 disabled={loading}
-                                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-500 to-rose-500
-                                           hover:from-red-600 hover:to-rose-600 text-white font-bold text-sm
+                                className="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600
+                                           hover:from-red-700 hover:to-rose-700 text-white font-bold text-sm
                                            transition-all shadow-md shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {loading ? 'Booking...' : 'Confirm Appointment'}
@@ -342,13 +367,15 @@ const Doctors = () => {
             {/* ── Hero */}
             <div className="bg-gradient-to-br from-red-500 to-rose-600 text-white py-14 px-4">
                 <div className="max-w-4xl mx-auto text-center">
-                    <p className="text-red-200 text-sm font-semibold uppercase tracking-widest mb-2">EZDoctor Network</p>
+                    <p className="text-red-100 text-sm font-semibold uppercase tracking-widest mb-2">EZDoctor Network</p>
                     <h1 className="text-4xl md:text-5xl font-extrabold mb-3 leading-tight">Find the Right Doctor</h1>
                     <p className="text-red-100 text-lg mb-8">{doctors.length} verified doctors available right now</p>
                     <div className="relative max-w-md mx-auto">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <label htmlFor="doctor-search" className="sr-only">Search doctors</label>
                         <input
-                            type="text"
+                            id="doctor-search"
+                            type="search"
                             placeholder="Search by name, specialization, city..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
@@ -361,15 +388,16 @@ const Doctors = () => {
             <div className="max-w-7xl mx-auto px-4 py-10">
 
                 {/* ── Filters */}
-                <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 hide-scrollbar">
+                <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2 hide-scrollbar" role="group" aria-label="Filter by specialization">
                     <SlidersHorizontal className="w-4 h-4 text-gray-400 flex-shrink-0 mr-1" />
                     {SPECIALIZATIONS.map(spec => (
                         <button
                             key={spec}
+                            aria-pressed={activeSpec === spec}
                             onClick={() => setActiveSpec(spec)}
                             className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-all border
                                 ${activeSpec === spec
-                                    ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200'
+                                    ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-200'
                                     : 'bg-white text-gray-600 border-gray-200 hover:border-red-300 hover:text-red-500'}`}
                         >
                             {spec}
@@ -379,7 +407,7 @@ const Doctors = () => {
 
                 {/* ── Result count */}
                 {!loading && !error && (
-                    <p className="text-sm text-gray-400 mb-6 font-medium">
+                    <p className="text-sm text-gray-500 mb-6 font-medium" aria-live="polite">
                         Showing <span className="text-gray-700 font-bold">{filtered.length}</span> doctor{filtered.length !== 1 ? 's' : ''}
                         {activeSpec !== 'All' && ` · ${activeSpec}`}
                         {search && ` · "${search}"`}
@@ -399,7 +427,7 @@ const Doctors = () => {
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                         <p className="text-lg font-bold text-gray-700">Could not load doctors</p>
                         <p className="text-sm text-gray-400 mt-1 mb-6">{error}</p>
-                        <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition">
+                        <button onClick={() => window.location.reload()} className="px-6 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition">
                             Try Again
                         </button>
                     </div>
@@ -428,8 +456,8 @@ const Doctors = () => {
 
                 {/* ── Login hint */}
                 {!isAuth && !loading && (
-                    <p className="text-center text-xs text-gray-400 mt-8">
-                        <span onClick={() => navigate('/login')} className="text-red-500 font-semibold cursor-pointer hover:underline">Sign in</span>
+                    <p className="text-center text-xs text-gray-500 mt-8">
+                        <Link to="/login" className="text-red-700 font-semibold hover:underline">Sign in</Link>
                         {' '}to book appointments
                     </p>
                 )}

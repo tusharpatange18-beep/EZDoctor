@@ -55,24 +55,14 @@ const SOS = () => {
       const location = await getLocation();
       showToast(`Location found: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`, "success", 2000);
 
-      const API = import.meta.env.VITE_API_BASE;
-      const res = await fetch(`${API}/sos`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          patientName: formData.name,
-          location,
-          symptoms: formData.symptoms,
-          type: formData.type
-        }),
-      });
+      const { ok, data } = await createSOS({
+        patientName: formData.name,
+        location,
+        symptoms: formData.symptoms,
+        type: formData.type,
+      }, token);
 
-      const data = await res.json();
-
-      if (!res.ok) {
+      if (!ok) {
         showToast(data.message || "Failed to send SOS", "error");
         return;
       }
@@ -103,9 +93,9 @@ const SOS = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-500 animate-pulse" />
+            <AlertCircle className="w-8 h-8 text-red-500 animate-pulse" aria-hidden="true" />
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Emergency SOS</h2>
+          <h1 className="text-3xl font-extrabold text-gray-900">Emergency SOS</h1>
           <p className="mt-2 text-sm text-gray-500">
             Your GPS location will be auto-detected. Help is on the way.
           </p>
@@ -113,8 +103,8 @@ const SOS = () => {
 
         {/* GPS Status */}
         {gettingLocation && (
-          <div className="mb-4 flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm border border-blue-200">
-            <Loader className="w-4 h-4 animate-spin" />
+          <div role="status" className="mb-4 flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm border border-blue-200">
+            <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
             Detecting your location...
           </div>
         )}
@@ -122,7 +112,7 @@ const SOS = () => {
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
             <input
               type="text"
               id="name"
@@ -136,7 +126,7 @@ const SOS = () => {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
             <input
               type="tel"
               id="phone"
@@ -150,7 +140,7 @@ const SOS = () => {
 
           {/* Emergency Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Type</label>
+            <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Emergency Type</label>
             <select
               id="type"
               value={formData.type}
@@ -168,7 +158,7 @@ const SOS = () => {
 
           {/* Symptoms */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Symptoms</label>
+            <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">Symptoms</label>
             <textarea
               id="symptoms"
               rows={3}
@@ -180,8 +170,8 @@ const SOS = () => {
           </div>
 
           {/* Location note */}
-          <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
-            <MapPin className="w-3.5 h-3.5 text-red-400" />
+          <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+            <MapPin className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
             GPS location automatically attached when you submit
           </div>
 
@@ -189,10 +179,10 @@ const SOS = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 rounded-xl text-white font-bold bg-red-500 hover:bg-red-600 transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
+            className="w-full py-4 rounded-xl text-white font-bold bg-red-600 hover:bg-red-700 transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
           >
             {loading ? (
-              <><Loader className="w-4 h-4 animate-spin" /> Sending SOS...</>
+              <><Loader className="w-4 h-4 animate-spin" aria-hidden="true" /> Sending SOS...</>
             ) : (
               <>Send SOS Request</>
             )}

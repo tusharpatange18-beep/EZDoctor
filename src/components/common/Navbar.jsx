@@ -27,13 +27,13 @@ const Navbar = () => {
   const roleLabel = user?.role === 'doctor' ? 'Doctor' : user?.role === 'admin' ? 'Admin' : 'Patient';
 
   return (
-    <nav className="sticky top-0 z-50 bg-white shadow-sm w-full">
+    <nav aria-label="Main" className="sticky top-0 z-50 bg-white shadow-sm w-full">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
 
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <Link to="/" className="text-red-600 font-bold text-3xl tracking-tight">EZDoc</Link>
+            <Link to="/" aria-label="EZDoc home" className="text-red-600 font-bold text-3xl tracking-tight">EZDoc</Link>
           </div>
 
           {/* Desktop Nav */}
@@ -62,7 +62,7 @@ const Navbar = () => {
                 {user?.role === 'patient' && (
                   <>
                     <Link to="/my-appointments" className="text-sm font-semibold text-gray-600 hover:text-red-500 hover:underline">Appointments</Link>
-                    <Link to="/sos" className="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded-full font-semibold text-sm transition-colors shadow-md flex items-center gap-1.5">
+                    <Link to="/sos" className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-full font-semibold text-sm transition-colors shadow-md flex items-center gap-1.5">
                       <PhoneCall className="w-4 h-4" /> SOS
                     </Link>
                   </>
@@ -82,7 +82,7 @@ const Navbar = () => {
             ) : (
               <>
                 <Link to="/login" className="text-gray-600 hover:text-red-600 font-medium text-sm transition">Sign In</Link>
-                <Link to="/register" className="bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-full font-semibold transition-colors shadow-md flex items-center gap-2 text-sm">
+                <Link to="/register" className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-full font-semibold transition-colors shadow-md flex items-center gap-2 text-sm">
                   <PhoneCall className="w-4 h-4" />
                   Get Help Now
                 </Link>
@@ -92,8 +92,14 @@ const Navbar = () => {
 
           {/* Mobile toggle */}
           <div className="md:hidden flex items-center">
-            <button onClick={() => setIsOpen(!isOpen)} className="text-gray-600 hover:text-red-600 focus:outline-none">
-              {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              aria-label={isOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isOpen}
+              aria-controls="mobile-menu"
+              className="p-2 rounded-md text-gray-600 hover:text-red-600"
+            >
+              {isOpen ? <X className="w-6 h-6" aria-hidden="true" /> : <Menu className="w-6 h-6" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -101,7 +107,7 @@ const Navbar = () => {
 
       {/* Mobile Menu */}
       {isOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100">
+        <div id="mobile-menu" className="md:hidden bg-white border-t border-gray-100">
           <div className="px-4 pt-2 pb-4 space-y-1">
             <button onClick={() => handleScroll('home')} className="block w-full text-left px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 font-medium rounded-md text-sm">Home</button>
             <button onClick={() => handleScroll('how-it-works')} className="block w-full text-left px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 font-medium rounded-md text-sm">How It Works</button>
@@ -113,7 +119,7 @@ const Navbar = () => {
                 {user?.role === 'patient' && (
                   <>
                     <Link to="/my-appointments" onClick={() => setIsOpen(false)} className="block px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 font-medium rounded-md text-sm">My Appointments</Link>
-                    <Link to="/sos" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-red-500 text-white rounded-md font-medium text-sm text-center mt-1">
+                    <Link to="/sos" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-red-600 text-white rounded-md font-medium text-sm text-center mt-1">
                       Send SOS
                     </Link>
                   </>
@@ -130,7 +136,7 @@ const Navbar = () => {
             ) : (
               <>
                 <Link to="/login" onClick={() => setIsOpen(false)} className="block px-3 py-2 text-gray-700 font-medium rounded-md text-sm">Sign In</Link>
-                <Link to="/register" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-red-500 text-white rounded-md font-medium text-sm text-center">
+                <Link to="/register" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-red-600 text-white rounded-md font-medium text-sm text-center">
                   Register
                 </Link>
               </>

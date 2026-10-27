@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
 
@@ -10,31 +10,29 @@ const cleanAuth = () => {
     sessionStorage.removeItem('requestId');
 };
 
-export const AuthProvider = ({ children }) => {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(null);
-    const [loading, setLoading] = useState(true);
+// Read the saved session synchronously so the first render already knows who is
+// logged in. (Hydrating in an effect rendered an empty page for one frame, which
+// made the footer jump and caused a large layout shift.)
+const readSession = () => {
+    const storedToken = sessionStorage.getItem('token');
+    const storedUser = sessionStorage.getItem('user');
+    if (!storedToken || !storedUser) return { token: null, user: null };
+    try {
+        const parsed = JSON.parse(storedUser);
+        // Sanity-check: ensure the user object actually has a role
+        if (parsed && parsed.role) return { token: storedToken, user: parsed };
+    } catch {
+        // JSON parse failed — fall through and clear storage
+    }
+    cleanAuth(); // Corrupt/old session — clean it up
+    return { token: null, user: null };
+};
 
-    useEffect(() => {
-        const storedToken = sessionStorage.getItem('token');
-        const storedUser = sessionStorage.getItem('user');
-        if (storedToken && storedUser) {
-            try {
-                const parsed = JSON.parse(storedUser);
-                // Sanity-check: ensure the user object actually has a role
-                if (parsed && parsed.role) {
-                    setToken(storedToken);
-                    setUser(parsed);
-                } else {
-                    // Corrupt/old session — clean it up
-                    cleanAuth();
-                }
-            } catch {
-                cleanAuth(); // JSON parse failed — clear storage
-            }
-        }
-        setLoading(false);
-    }, []);
+export const AuthProvider = ({ children }) => {
+    const [session] = useState(readSession);
+    const [user, setUser] = useState(session.user);
+    const [token, setToken] = useState(session.token);
+    const loading = false; // kept for consumers; hydration is now synchronous
 
     const login = (newToken, newUser) => {
         // Always wipe old session before writing new one
@@ -60,5 +58,6 @@ export const AuthProvider = ({ children }) => {
     );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
 

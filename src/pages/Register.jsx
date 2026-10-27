@@ -22,15 +22,9 @@ const Register = () => {
         setLoading(true);
 
         try {
-            const API = import.meta.env.VITE_API_BASE;
-            const res = await fetch(`${API}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form),
-            });
-            const data = await res.json();
+            const { ok, data } = await registerUser(form);
 
-            if (!res.ok) {
+            if (!ok) {
                 setError(data.message || 'Registration failed');
                 setLoading(false);
                 return;
@@ -42,7 +36,7 @@ const Register = () => {
             setTimeout(() => {
                 navigate(data.user.role === 'doctor' ? '/doctor-dashboard' : '/home');
             }, 800);
-        } catch (err) {
+        } catch {
             setError('Server error. Please try again.');
         } finally {
             setLoading(false);
@@ -66,8 +60,8 @@ const Register = () => {
 
                     {/* Error */}
                     {error && (
-                        <div className="mb-4 flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm border border-red-200">
-                            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        <div role="alert" className="mb-4 flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm border border-red-200">
+                            <AlertCircle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
                             {error}
                         </div>
                     )}
@@ -75,11 +69,12 @@ const Register = () => {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Name */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                            <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                                 <input
                                     type="text"
+                                    id="register-name"
                                     name="name"
                                     value={form.name}
                                     onChange={handleChange}
@@ -92,11 +87,12 @@ const Register = () => {
 
                         {/* Email */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                            <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                                 <input
                                     type="email"
+                                    id="register-email"
                                     name="email"
                                     value={form.email}
                                     onChange={handleChange}
@@ -109,11 +105,12 @@ const Register = () => {
 
                         {/* Password */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                            <label htmlFor="register-password" className="block text-sm font-medium text-gray-700 mb-1">Password</label>
                             <div className="relative">
-                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" aria-hidden="true" />
                                 <input
                                     type="password"
+                                    id="register-password"
                                     name="password"
                                     value={form.password}
                                     onChange={handleChange}
@@ -126,13 +123,14 @@ const Register = () => {
                         </div>
 
                         {/* Role */}
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">I am a...</label>
+                        <fieldset>
+                            <legend className="block text-sm font-medium text-gray-700 mb-1">I am a...</legend>
                             <div className="grid grid-cols-2 gap-3">
                                 {['patient', 'doctor'].map(r => (
                                     <button
                                         key={r}
                                         type="button"
+                                        aria-pressed={form.role === r}
                                         onClick={() => setForm(prev => ({ ...prev, role: r }))}
                                         className={`py-3 rounded-xl border-2 font-semibold text-sm capitalize transition-all
                                             ${form.role === r
@@ -143,13 +141,13 @@ const Register = () => {
                                     </button>
                                 ))}
                             </div>
-                        </div>
+                        </fieldset>
 
                         {/* Submit */}
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm"
+                            className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm"
                         >
                             {loading ? 'Creating account...' : 'Create Account →'}
                         </button>

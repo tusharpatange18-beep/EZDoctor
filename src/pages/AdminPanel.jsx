@@ -21,7 +21,9 @@ const AdminPanel = () => {
     };
 
     useEffect(() => {
-        loadRequests();
+        fetchAllRequests()
+            .then(data => setRequests(Array.isArray(data) ? data : []))
+            .finally(() => setLoading(false));
     }, []);
 
     // Live updates via useSocket hook
@@ -44,42 +46,46 @@ const AdminPanel = () => {
             {/* Header */}
             <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">🔧 Admin Panel</h1>
+                    <h1 className="text-3xl font-bold text-gray-900"><span aria-hidden="true">🔧 </span>Admin Panel</h1>
                     <p className="text-gray-500 mt-1">Monitor all emergency requests in real-time</p>
                 </div>
                 <button
                     onClick={loadRequests}
                     className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition shadow-sm"
                 >
-                    <RefreshCw className="w-4 h-4" /> Refresh
+                    <RefreshCw className="w-4 h-4" aria-hidden="true" /> Refresh
                 </button>
             </div>
 
             {/* Stats Bar */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-8">
-                <div
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-8" role="group" aria-label="Filter requests by status">
+                <button
+                    type="button"
+                    aria-pressed={filter === 'all'}
                     onClick={() => setFilter('all')}
                     className={`cursor-pointer rounded-xl p-3 text-center border transition ${filter === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white border-gray-200 hover:border-gray-400'}`}
                 >
                     <div className="text-xl font-bold">{requests.length}</div>
-                    <div className="text-xs mt-0.5 opacity-70">All</div>
-                </div>
+                    <div className="text-xs mt-0.5">All</div>
+                </button>
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                    <div
+                    <button
+                        type="button"
                         key={key}
+                        aria-pressed={filter === key}
                         onClick={() => setFilter(key)}
                         className={`cursor-pointer rounded-xl p-3 text-center border transition ${filter === key ? `${cfg.bg} border-current` : 'bg-white border-gray-200 hover:border-gray-300'}`}
                     >
                         <div className="text-xl font-bold">{counts[key] || 0}</div>
-                        <div className="text-xs mt-0.5 opacity-70">{cfg.label}</div>
-                    </div>
+                        <div className="text-xs mt-0.5">{cfg.label}</div>
+                    </button>
                 ))}
             </div>
 
             {/* Table */}
             {loading ? (
                 <div className="text-center py-20">
-                    <div className="text-5xl mb-4 animate-bounce">📋</div>
+                    <div className="text-5xl mb-4 animate-bounce" aria-hidden="true">📋</div>
                     <p className="text-gray-500">Loading requests...</p>
                 </div>
             ) : filtered.length === 0 ? (

@@ -53,6 +53,7 @@ const ToastItem = ({ toast, onRemove }) => {
 
     return (
         <div
+            role={toast.type === 'error' ? 'alert' : 'status'}
             className={`relative bg-white rounded-xl shadow-lg border border-gray-100 border-l-4 overflow-hidden
                         min-w-[300px] max-w-sm transition-all duration-300
                         ${border} ${leaving ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0 animate-toast-in'}`}
@@ -65,7 +66,7 @@ const ToastItem = ({ toast, onRemove }) => {
 
             <div className="flex items-start gap-3 p-3.5 pr-4">
                 {/* Icon */}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base ${iconBg}`}>
+                <div aria-hidden="true" className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-base ${iconBg}`}>
                     {icon}
                 </div>
 
@@ -82,8 +83,8 @@ const ToastItem = ({ toast, onRemove }) => {
                 {/* Close */}
                 <button
                     onClick={dismiss}
-                    className="text-gray-300 hover:text-gray-500 transition text-sm mt-0.5 flex-shrink-0"
-                    aria-label="Dismiss"
+                    className="text-gray-500 hover:text-gray-700 transition text-sm mt-0.5 flex-shrink-0"
+                    aria-label="Dismiss notification"
                 >
                     ✕
                 </button>
@@ -98,7 +99,7 @@ const ToastItem = ({ toast, onRemove }) => {
 export const ToastContainer = ({ toasts, removeToast }) => {
     if (!toasts || toasts.length === 0) return null;
     return (
-        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2.5 items-end">
+        <div className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2.5 items-end" aria-live="polite">
             {toasts.map(t => (
                 <ToastItem key={t.id} toast={t} onRemove={removeToast} />
             ))}
@@ -115,6 +116,7 @@ export const ToastContainer = ({ toasts, removeToast }) => {
 // showToast("message", "success")
 // showToast({ title: "Title", message: "Body", type: "error" })
 // ─────────────────────────────────────────────────────
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToast = () => {
     const [toasts, setToasts] = useState([]);
 

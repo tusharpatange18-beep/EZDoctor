@@ -6,7 +6,7 @@ const HowItWorks = () => {
     <section id="how-it-works" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <h2 className="text-primary font-bold uppercase tracking-wider text-sm mb-2">Simple Process</h2>
+          <h2 className="text-red-700 font-bold uppercase tracking-wider text-sm mb-2">Simple Process</h2>
           <h3 className="text-4xl font-extrabold text-gray-900">How It Works</h3>
           <div className="w-16 h-1 bg-primary mx-auto mt-6 rounded-full"></div>
         </div>

@@ -16,8 +16,8 @@ const Home = () => {
             
             {/* Left Content */}
             <div className="w-full lg:w-1/2 text-center lg:text-left">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-red-100 text-primary font-semibold text-sm mb-6">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse mr-2"></span>
+              <div className="inline-flex items-center px-4 py-2 rounded-full bg-red-100 text-red-700 font-semibold text-sm mb-6">
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse mr-2" aria-hidden="true"></span>
                 24/7 Rural Emergency Response
               </div>
               <h1 className="text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight mb-6 tracking-tight">
@@ -41,7 +41,7 @@ const Home = () => {
             <div className="w-full lg:w-1/2 relative flex justify-center mt-12 lg:mt-0">
               <div className="relative w-full max-w-lg aspect-square">
                 <div className="absolute inset-0 bg-red-100 rounded-full blur-3xl opacity-50"></div>
-                <svg viewBox="0 0 500 500" className="w-full h-full relative z-10 drop-shadow-xl" xmlns="http://www.w3.org/2000/svg">
+                <svg viewBox="0 0 500 500" className="w-full h-full relative z-10 drop-shadow-xl" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
                   <circle cx="250" cy="250" r="220" fill="#fef2f2" />
                   <rect x="210" y="180" width="80" height="200" rx="10" fill="#ffffff" stroke="#DC2626" strokeWidth="4" />
                   <circle cx="250" cy="140" r="35" fill="#fca5a5" stroke="#DC2626" strokeWidth="4" />
@@ -67,7 +67,7 @@ const Home = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-10">
             <div>
-              <h2 className="text-primary font-bold uppercase tracking-wider text-sm mb-2">Live Status</h2>
+              <h2 className="text-red-700 font-bold uppercase tracking-wider text-sm mb-2">Live Status</h2>
               <h3 className="text-3xl font-extrabold text-gray-900">Doctors Available Right Now</h3>
             </div>
           </div>
@@ -92,7 +92,7 @@ const Home = () => {
       <section id="features" className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-primary font-bold uppercase tracking-wider text-sm mb-2">Why Choose EZDoc</h2>
+            <h2 className="text-red-700 font-bold uppercase tracking-wider text-sm mb-2">Why Choose EZDoc</h2>
             <h3 className="text-4xl font-extrabold text-gray-900">Platform Features</h3>
             <p className="mt-4 text-xl text-gray-500 max-w-3xl mx-auto">Built specifically for the challenges of rural healthcare access.</p>
           </div>

@@ -1,10 +1,5 @@
 import { API_BASE } from '../constants/status';
 
-const getHeaders = (token) => ({
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-});
-
 // ─── Auth ────────────────────────────────────────
 export const registerUser = async (payload) => {
     const res = await fetch(`${API_BASE}/auth/register`, {

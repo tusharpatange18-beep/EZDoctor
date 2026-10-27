@@ -58,6 +58,9 @@ Return only a JSON object like this: {"level": "high", "label": "🔴 HIGH PRIOR
 
         await request.save();
 
+        // Push the new SOS to every open doctor/admin dashboard immediately
+        global.io.emit('requestUpdate', request);
+
         res.status(201).json(request);
 
     } catch (error) {

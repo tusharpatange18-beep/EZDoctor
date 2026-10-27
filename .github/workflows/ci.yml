@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    name: Lint, unit tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_API_BASE: https://ezdoctor.onrender.com/api
+          VITE_SOCKET_URL: https://ezdoctor.onrender.com
+
+  e2e:
+    name: Playwright E2E + accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ezdoc-backend/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: ezdoc-backend
+      - run: npx playwright install --with-deps chromium
+      # Visual snapshots are generated on Windows (font rendering differs on Linux),
+      # so CI runs the functional and accessibility suites only.
+      - run: npm run test:e2e
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

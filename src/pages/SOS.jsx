@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, MapPin, Loader } from "lucide-react";
+import { AlertCircle, MapPin, Loader, WifiOff, Phone } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToast, ToastContainer } from "../components/common/Toast";
 import { createSOS } from "../api/requests";
+import { enqueueSOS } from "../offline/db";
+import { SOS_SENT_EVENT } from "../offline/sosQueue";
 
 const SOS = () => {
   const navigate = useNavigate();
@@ -18,6 +20,14 @@ const SOS = () => {
   });
   const [loading, setLoading] = useState(false);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [queued, setQueued] = useState(false);
+
+  // A queued SOS is sent automatically when the connection returns (see OfflineBanner)
+  useEffect(() => {
+    const onSent = () => navigate("/track");
+    window.addEventListener(SOS_SENT_EVENT, onSent);
+    return () => window.removeEventListener(SOS_SENT_EVENT, onSent);
+  }, [navigate]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
@@ -50,29 +60,39 @@ const SOS = () => {
     e.preventDefault();
     setLoading(true);
 
+    let location;
     try {
       showToast("Getting your GPS location...", "info");
-      const location = await getLocation();
+      location = await getLocation();
       showToast(`Location found: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`, "success", 2000);
+    } catch (error) {
+      showToast(error.code === 1 ? "Location access denied. Please allow GPS." : "Could not get your location. Please try again.", "error");
+      setLoading(false);
+      return;
+    }
 
-      const API = import.meta.env.VITE_API_BASE;
-      const res = await fetch(`${API}/sos`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({
-          patientName: formData.name,
-          location,
-          symptoms: formData.symptoms,
-          type: formData.type
-        }),
-      });
+    const payload = {
+      patientName: formData.name,
+      location,
+      symptoms: formData.symptoms,
+      type: formData.type,
+    };
 
-      const data = await res.json();
+    // No connection: keep the SOS on the device and send it on reconnect
+    const queueForLater = async () => {
+      await enqueueSOS(payload, token);
+      setQueued(true);
+    };
 
-      if (!res.ok) {
+    try {
+      if (!navigator.onLine) {
+        await queueForLater();
+        return;
+      }
+
+      const { ok, data } = await createSOS(payload, token);
+
+      if (!ok) {
         showToast(data.message || "Failed to send SOS", "error");
         return;
       }
@@ -83,13 +103,9 @@ const SOS = () => {
       setTimeout(() => navigate("/track"), 1200);
 
       setFormData({ name: user?.name || "", phone: "", type: "Accident", symptoms: "" });
-    } catch (error) {
-      console.error(error);
-      if (error.code === 1) {
-        showToast("Location access denied. Please allow GPS.", "error");
-      } else {
-        showToast("Failed to send SOS. Check your connection.", "error");
-      }
+    } catch {
+      // fetch throws only on network failure
+      await queueForLater();
     } finally {
       setLoading(false);
     }
@@ -103,9 +119,9 @@ const SOS = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <AlertCircle className="w-8 h-8 text-red-500 animate-pulse" />
+            <AlertCircle className="w-8 h-8 text-red-500 animate-pulse" aria-hidden="true" />
           </div>
-          <h2 className="text-3xl font-extrabold text-gray-900">Emergency SOS</h2>
+          <h1 className="text-3xl font-extrabold text-gray-900">Emergency SOS</h1>
           <p className="mt-2 text-sm text-gray-500">
             Your GPS location will be auto-detected. Help is on the way.
           </p>
@@ -113,16 +129,34 @@ const SOS = () => {
 
         {/* GPS Status */}
         {gettingLocation && (
-          <div className="mb-4 flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm border border-blue-200">
-            <Loader className="w-4 h-4 animate-spin" />
+          <div role="status" className="mb-4 flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-3 rounded-xl text-sm border border-blue-200">
+            <Loader className="w-4 h-4 animate-spin" aria-hidden="true" />
             Detecting your location...
           </div>
         )}
 
+        {queued ? (
+          <div role="alert" className="space-y-4 text-center">
+            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
+              <WifiOff className="w-7 h-7 text-gray-700" aria-hidden="true" />
+            </div>
+            <h2 className="text-lg font-bold text-gray-900">No connection: SOS saved</h2>
+            <p className="text-sm text-gray-600">
+              Your SOS and GPS location are saved on this device and will be sent automatically
+              the moment you're back online. Keep this page open.
+            </p>
+            <a
+              href="tel:108"
+              className="w-full py-3 rounded-xl text-white font-bold bg-red-600 hover:bg-red-700 transition flex items-center justify-center gap-2"
+            >
+              <Phone className="w-4 h-4" aria-hidden="true" /> Life-threatening? Call 108 now
+            </a>
+          </div>
+        ) : (
         <form className="space-y-5" onSubmit={handleSubmit}>
           {/* Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
             <input
               type="text"
               id="name"
@@ -136,7 +170,7 @@ const SOS = () => {
 
           {/* Phone */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
             <input
               type="tel"
               id="phone"
@@ -150,7 +184,7 @@ const SOS = () => {
 
           {/* Emergency Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Type</label>
+            <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">Emergency Type</label>
             <select
               id="type"
               value={formData.type}
@@ -168,7 +202,7 @@ const SOS = () => {
 
           {/* Symptoms */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Symptoms</label>
+            <label htmlFor="symptoms" className="block text-sm font-medium text-gray-700 mb-1">Symptoms</label>
             <textarea
               id="symptoms"
               rows={3}
@@ -180,8 +214,8 @@ const SOS = () => {
           </div>
 
           {/* Location note */}
-          <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 px-3 py-2 rounded-lg">
-            <MapPin className="w-3.5 h-3.5 text-red-400" />
+          <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
+            <MapPin className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
             GPS location automatically attached when you submit
           </div>
 
@@ -189,15 +223,16 @@ const SOS = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 rounded-xl text-white font-bold bg-red-500 hover:bg-red-600 transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
+            className="w-full py-4 rounded-xl text-white font-bold bg-red-600 hover:bg-red-700 transition disabled:opacity-60 shadow-lg shadow-red-200 text-sm flex items-center justify-center gap-2"
           >
             {loading ? (
-              <><Loader className="w-4 h-4 animate-spin" /> Sending SOS...</>
+              <><Loader className="w-4 h-4 animate-spin" aria-hidden="true" /> Sending SOS...</>
             ) : (
               <>Send SOS Request</>
             )}
           </button>
         </form>
+        )}
       </div>
     </div>
   );

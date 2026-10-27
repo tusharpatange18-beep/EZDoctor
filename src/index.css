@@ -2,6 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Visible keyboard focus everywhere (mouse clicks don't show it) */
+:focus-visible {
+  outline: 3px solid #b91c1c;
+  outline-offset: 2px;
+}
+
+/* ── Respect users who ask the OS for less motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── SOS pulse ring */
 @keyframes sosPulse {
   0%   { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }

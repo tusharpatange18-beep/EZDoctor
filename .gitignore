@@ -36,3 +36,7 @@ Thumbs.db
 
 # Personal notes (contain credentials)
 EZdoc.txt
+
+# Test output
+playwright-report/
+test-results/

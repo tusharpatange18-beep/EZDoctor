@@ -22,18 +22,13 @@ const StepIcon = ({ stepKey, className }) => {
 
 const PatientTracking = () => {
     const navigate = useNavigate();
+    const [requestId] = useState(() => sessionStorage.getItem('requestId'));
     const [request, setRequest] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(!!requestId);
+    const [error, setError] = useState(requestId ? null : 'No SOS request found. Please submit an SOS first.');
 
     useEffect(() => {
-        const requestId = sessionStorage.getItem('requestId');
-
-        if (!requestId) {
-            setError('No SOS request found. Please submit an SOS first.');
-            setLoading(false);
-            return;
-        }
+        if (!requestId) return;
 
         fetchRequestById(requestId)
             .then(data => {
@@ -44,7 +39,7 @@ const PatientTracking = () => {
                 setError('Failed to load tracking data. Please try again.');
                 setLoading(false);
             });
-    }, []);
+    }, [requestId]);
 
     // Live socket updates
     useSocket({
@@ -82,7 +77,7 @@ const PatientTracking = () => {
                     <p className="text-gray-500 text-sm mb-6">{error}</p>
                     <button
                         onClick={() => navigate('/sos')}
-                        className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-semibold transition shadow-md"
+                        className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition shadow-md"
                     >
                         Submit New SOS
                     </button>
@@ -103,8 +98,10 @@ const PatientTracking = () => {
                     <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white shadow-sm">
                         <StepIcon stepKey={currentStep.key} className={`w-6 h-6 ${currentStep.color}`} />
                     </div>
-                    <div className="flex-1">
-                        <p className={`text-lg font-extrabold ${currentStep.color}`}>{currentStep.label}</p>
+                    <div className="flex-1" role="status" aria-live="polite" aria-atomic="true">
+                        <h1 className={`text-lg font-extrabold ${currentStep.color}`}>
+                            <span className="sr-only">SOS status: </span>{currentStep.label}
+                        </h1>
                         <p className="text-sm text-gray-500 mt-0.5">Patient: <span className="font-medium">{request?.patientName}</span></p>
                     </div>
                     {/* Live indicator */}
@@ -117,12 +114,12 @@ const PatientTracking = () => {
 
             {/* ── Status Timeline */}
             <div className="max-w-2xl mx-auto px-4 py-8">
-                <div className="flex items-start justify-between">
+                <ol className="flex items-start justify-between" aria-label="SOS progress">
                     {STATUS_STEPS.map((step, idx) => {
                         const done   = idx < currentIdx;
                         const active = idx === currentIdx;
                         return (
-                            <div key={step.key} className="flex flex-col items-center flex-1">
+                            <li key={step.key} className="flex flex-col items-center flex-1" aria-current={active ? 'step' : undefined}>
                                 {/* Connector + Circle row */}
                                 <div className="relative w-full flex items-center justify-center mb-2">
                                     {/* Left connector */}
@@ -152,16 +149,17 @@ const PatientTracking = () => {
                                     ${active ? step.color : done ? 'text-emerald-600' : 'text-gray-400'}`}
                                 >
                                     {step.label}
+                                    {done && <span className="sr-only"> (done)</span>}
                                 </p>
-                            </div>
+                            </li>
                         );
                     })}
-                </div>
+                </ol>
             </div>
 
             {/* ── Map */}
             {request?.location?.lat && (
-                <div className="h-[45vh] w-full shadow-inner border-y border-gray-200">
+                <div className="h-[45vh] w-full shadow-inner border-y border-gray-200" role="region" aria-label="Live map of patient and ambulance location">
                     <MapContainer
                         center={[request.location.lat, request.location.lng]}
                         zoom={14}
@@ -201,7 +199,7 @@ const PatientTracking = () => {
                             { label: 'Submitted', value: new Date(request?.createdAt).toLocaleString() },
                         ].map(row => (
                             <div key={row.label} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                                <span className="text-xs text-gray-400 font-medium">{row.label}</span>
+                                <span className="text-xs text-gray-500 font-medium">{row.label}</span>
                                 <span className={`text-sm font-semibold ${row.color || 'text-gray-800'}`}>{row.value}</span>
                             </div>
                         ))}
@@ -209,7 +207,7 @@ const PatientTracking = () => {
                 </div>
 
                 {/* Help hint */}
-                <p className="text-center text-xs text-gray-400 mt-4">
+                <p className="text-center text-xs text-gray-500 mt-4">
                     This page updates automatically in real-time
                 </p>
             </div>

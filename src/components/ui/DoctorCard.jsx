@@ -4,7 +4,7 @@ import { MapPin, Clock } from 'lucide-react';
 const DoctorCard = ({ name, specialty, location, responseTime, initials }) => {
   return (
     <div className="min-w-[300px] md:min-w-0 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 snap-center relative">
-      <div className="absolute top-6 right-6 flex items-center bg-green-50 text-green-600 px-2.5 py-1 rounded-full text-xs font-semibold border border-green-100">
+      <div className="absolute top-6 right-6 flex items-center bg-green-50 text-green-700 px-2.5 py-1 rounded-full text-xs font-semibold border border-green-100">
         <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse mr-1.5"></span>
         Online Now
       </div>

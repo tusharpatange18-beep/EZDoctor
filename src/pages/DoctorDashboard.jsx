@@ -7,6 +7,7 @@ import { useToast, ToastContainer } from '../components/common/Toast';
 import StatusBadge from '../components/ui/StatusBadge';
 import { STATUS_CONFIG, API_BASE } from '../constants/status';
 import useSocket from '../hooks/useSocket';
+import upsertById from '../utils/upsertById';
 import { fetchAllRequests, acceptRequest as apiAcceptRequest, updateRequestStatus } from '../api/requests';
 
 // ── Inline SVG spinner to avoid extra deps
@@ -39,10 +40,10 @@ const DoctorDashboard = () => {
   // ── Live socket updates
   useSocket({
     locationUpdate: (updated) => {
-      setRequests(prev => prev.map(r => r._id === updated._id ? updated : r));
+      setRequests(prev => upsertById(prev, updated));
     },
     requestUpdate: (updated) => {
-      setRequests(prev => prev.map(r => r._id === updated._id ? updated : r));
+      setRequests(prev => upsertById(prev, updated));
       const cfg = STATUS_CONFIG[updated.status];
       if (cfg) showToast({
         title: `Status Updated`,
@@ -186,10 +187,11 @@ const DoctorDashboard = () => {
           </div>
           <button
             onClick={loadRequests}
-            className="p-2 rounded-full border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 transition"
+            className="p-2 rounded-full border border-gray-200 text-gray-500 hover:text-gray-700 hover:border-gray-300 transition"
             title="Refresh"
+            aria-label="Refresh requests"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -206,14 +208,14 @@ const DoctorDashboard = () => {
             <span className={`${stat.text}`}>{stat.icon}</span>
             <div>
               <div className={`text-2xl font-extrabold ${stat.text}`}>{stat.value}</div>
-              <div className="text-xs text-gray-400 font-medium">{stat.label}</div>
+              <div className="text-xs text-gray-500 font-medium">{stat.label}</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* ── MAP */}
-      <div className="h-[360px] w-full mb-10 rounded-2xl overflow-hidden shadow-md border border-gray-200">
+      <div className="h-[360px] w-full mb-10 rounded-2xl overflow-hidden shadow-md border border-gray-200" role="region" aria-label="Map of SOS requests">
         <MapContainer
           center={requests.length && requests[0].location?.lat
             ? [requests[0].location.lat, requests[0].location.lng]
@@ -247,7 +249,7 @@ const DoctorDashboard = () => {
         <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
           <Stethoscope className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-xl font-bold text-gray-700">No active requests</p>
-          <p className="text-sm text-gray-400 mt-2">New SOS requests will appear here in real-time</p>
+          <p className="text-sm text-gray-500 mt-2">New SOS requests will appear here in real-time</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -257,8 +259,9 @@ const DoctorDashboard = () => {
               .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
             return (
-              <div
+              <article
                 key={request._id}
+                aria-label={`SOS from ${request.patientName}`}
                 className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 flex flex-col transition-all hover:shadow-md ${cfg.border}`}
               >
                 {/* Card header */}
@@ -268,8 +271,8 @@ const DoctorDashboard = () => {
                       {initials}
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-gray-900 leading-tight">{request.patientName}</h3>
-                      <p className="text-xs text-gray-400 mt-0.5">
+                      <h2 className="text-base font-bold text-gray-900 leading-tight">{request.patientName}</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
                         {new Date(request.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
@@ -328,7 +331,7 @@ const DoctorDashboard = () => {
 
                 {/* Action */}
                 <div className="flex gap-2">{renderActions(request)}</div>
-              </div>
+              </article>
             );
           })}
         </div>

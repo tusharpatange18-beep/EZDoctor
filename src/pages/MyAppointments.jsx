@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, MapPin, CheckCircle, XCircle, Search, User, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/common/Toast';
 import { API_BASE } from '../constants/status';
 
 const MyAppointments = () => {
-    const { token, user } = useAuth();
+    const { token } = useAuth();
     const { showToast, toasts, removeToast } = useToast();
     const [appointments, setAppointments] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -35,6 +36,9 @@ const MyAppointments = () => {
     const handleCancel = async (id) => {
         if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
         
+        // Optimistic: mark cancelled immediately, restore the original if the server fails
+        const original = appointments.find(app => app._id === id);
+        setAppointments(prev => prev.map(app => app._id === id ? { ...app, status: 'cancelled' } : app));
         setCancelling(prev => ({ ...prev, [id]: true }));
         try {
             const res = await fetch(`${API_BASE}/appointments/${id}/cancel`, {
@@ -48,7 +52,8 @@ const MyAppointments = () => {
             setAppointments(prev => prev.map(app => app._id === id ? data.appointment : app));
             showToast('Appointment cancelled successfully', 'success');
         } catch (err) {
-            showToast(`${err.message}`, 'error');
+            setAppointments(prev => prev.map(app => app._id === id ? original : app));
+            showToast(err instanceof TypeError ? 'No connection. Your appointment is still booked.' : err.message, 'error');
         } finally {
             setCancelling(prev => ({ ...prev, [id]: false }));
         }
@@ -75,7 +80,7 @@ const MyAppointments = () => {
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                         <p className="text-lg font-bold text-gray-700">Could not load appointments</p>
                         <p className="text-sm text-gray-400 mt-1 mb-6">{error}</p>
-                        <button onClick={fetchAppointments} className="px-6 py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition">
+                        <button onClick={fetchAppointments} className="px-6 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition">
                             Try Again
                         </button>
                     </div>
@@ -84,23 +89,22 @@ const MyAppointments = () => {
                         <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-lg font-bold text-gray-700">No appointments found</p>
                         <p className="text-sm text-gray-400 mt-1">You haven't booked any doctor appointments yet.</p>
-                        <a href="/doctors" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-red-500 text-white rounded-xl text-sm font-semibold hover:bg-red-600 transition shadow-md shadow-red-200">
-                            <Search className="w-4 h-4" /> Find a Doctor
-                        </a>
+                        <Link to="/doctors" className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition shadow-md shadow-red-200">
+                            <Search className="w-4 h-4" aria-hidden="true" /> Find a Doctor
+                        </Link>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {appointments.map(appointment => {
                             const isCancelled = appointment.status === 'cancelled';
                             const docName = appointment.doctorId?.name || 'Unknown Doctor';
-                            const initials = docName.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2);
 
                             return (
                                 <div key={appointment._id} className={`bg-white rounded-2xl p-5 md:p-6 shadow-sm border flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:shadow-md ${isCancelled ? 'border-gray-200 opacity-75 grayscale' : 'border-l-4 border-l-red-500'}`}>
                                     <div className="flex gap-4">
                                         <div className={`w-14 h-14 rounded-2xl text-xl flex items-center justify-center border flex-shrink-0 overflow-hidden ${isCancelled ? 'bg-gray-50 border-gray-200 text-gray-400' : 'bg-red-50 border-red-100 text-red-500'}`}>
                                             {appointment.doctorId?.photo && appointment.doctorId.photo.startsWith('http') ? (
-                                                <img src={appointment.doctorId.photo} alt={docName} className="w-full h-full object-cover" />
+                                                <img src={appointment.doctorId.photo} alt={docName} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                             ) : (
                                                 <User className="w-7 h-7" />
                                             )}
@@ -146,7 +150,8 @@ const MyAppointments = () => {
                                     {!isCancelled && appointment.status === 'booked' && (
                                         <div className="md:border-l md:border-gray-100 md:pl-6 flex md:flex-col justify-end gap-3 mt-4 md:mt-0 pt-4 md:pt-0 border-t border-gray-100 md:border-t-0">
                                             <button 
-                                                onClick={() => handleCancel(appointment._id)} 
+                                                onClick={() => handleCancel(appointment._id)}
+                                                aria-label={`Cancel visit with ${docName} on ${appointment.date}`}
                                                 disabled={cancelling[appointment._id]}
                                                 className="w-full md:w-auto px-5 py-2.5 text-sm font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
                                             >

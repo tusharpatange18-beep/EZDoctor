@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { WifiOff, CheckCircle } from 'lucide-react';
 import useOnlineStatus from '../../hooks/useOnlineStatus';
-import { flushSOSQueue } from '../../offline/sosQueue';
+
+// Loaded on demand so IndexedDB code stays out of the first-paint bundle
+const flushSOSQueue = () => import('../../offline/sosQueue').then(m => m.flushSOSQueue());
 
 /**
  * Shows an offline banner and, when the connection comes back, sends any SOS

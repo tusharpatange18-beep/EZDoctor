@@ -67,7 +67,7 @@ Lighthouse 12, mobile emulation, production build, median of 3 runs per page.
 - **Layout shift (CLS) on Home: 0.903 → 0.** The session was read in an effect, so the first render was empty and the footer jumped; it is now read synchronously.
 - **JavaScript on first load: 520 KB → about 270 KB** (149 KB → 91 KB transferred). Every route is lazy-loaded; Leaflet (154 KB) and socket.io-client (41 KB) only download on the map pages. `ANALYZE=1 npm run build` writes a bundle treemap to `dist/stats.html`.
 - Removed an unused render-blocking Google Font (about 840 ms) and unused assets.
-- Accessibility: skip link, landmarks, visible focus, labelled inputs and icon buttons, an accessible booking dialog (focus trap entry, Escape, focus return), live regions for SOS status and toasts, focus moved to the page on route change, WCAG AA colour contrast, reduced-motion support. axe-core reports no WCAG 2.1 A/AA violations on any public page.
+- Accessibility: skip link, landmarks, visible focus, labelled inputs and icon buttons, an accessible booking dialog (focus trap entry, Escape, focus return), live regions for SOS status and toasts, focus moved to the page on route change, WCAG AA colour contrast, reduced-motion support. axe-core reports no WCAG 2.1 A/AA violations on the 4 audited pages (Home, Login, Register, Doctors).
 
 ---
 
@@ -76,14 +76,14 @@ Lighthouse 12, mobile emulation, production build, median of 3 runs per page.
 ```bash
 npm run lint         # ESLint
 npm test             # Vitest + React Testing Library (33 tests)
-npm run test:e2e     # Playwright end-to-end + accessibility (9 tests)
+npm run test:e2e     # Playwright end-to-end + accessibility (10 tests)
 npm run test:visual  # Playwright visual regression (4 page snapshots)
 ```
 
 - **Component tests** cover login and its errors, role-based routing, the SOS form with mocked GPS, live tracking with a mocked Socket.io client, doctor search and the booking dialog, real-time dashboard updates, the offline SOS queue (fake IndexedDB), optimistic booking rollback, and the Haversine helpers.
-- **End-to-end tests** start the real Express + Socket.io backend on an in-memory MongoDB (`e2e/test-backend.cjs`) and drive two browsers: a patient sends an SOS and a doctor accepts, moves and closes it while the patient watches every status change live. They also cover offline reload, an SOS queued offline and sent on reconnect, a keyboard-only SOS, and an axe scan of every public page.
+- **End-to-end tests** start the real Express + Socket.io backend on an in-memory MongoDB (`e2e/test-backend.cjs`) and drive two browsers: a patient sends an SOS and a doctor accepts, moves and closes it while the patient watches every status change live. They also cover offline reload, an SOS queued offline and sent on reconnect, the "waking up the server" notice, a keyboard-only SOS, and an axe scan of the 4 public pages.
 - **Visual regression** baselines were made on Windows; font rendering differs on Linux, so CI runs the functional and accessibility suites. Refresh baselines with `npm run test:visual -- --update-snapshots`.
-- **CI** (GitHub Actions) runs lint, unit tests, the production build and the Playwright suite on every push.
+- **CI** (GitHub Actions) runs lint, unit tests, the production build and the Playwright end-to-end and accessibility tests on every push. Visual regression snapshots run locally.
 
 ---
 
@@ -207,6 +207,12 @@ Socket.io events emitted by the server: `requestUpdate`, `locationUpdate`.
 4. A doctor accepts; the backend picks the nearest `available` ambulance by Haversine distance, marks it `busy` and attaches it to the request.
 5. Location updates are broadcast as they arrive, and the patient's map moves in real time.
 6. When the request is `completed`, the ambulance becomes `available` again.
+
+---
+
+## Hosting Note
+
+The backend runs on Render's free plan, which sleeps after 15 minutes idle and takes about 20-30 seconds to wake. The app pings the backend on load and shows a "waking up the server" notice if it is slow. To keep it awake, point a free uptime monitor (for example UptimeRobot) at `https://ezdoctor.onrender.com/` every 5 minutes.
 
 ---
 

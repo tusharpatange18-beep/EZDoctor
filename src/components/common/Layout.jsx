@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import Navbar from './Navbar';
 import Footer from './Footer';
 import OfflineBanner from './OfflineBanner';
+import ServerWakeNotice from './ServerWakeNotice';
 import { Outlet, useLocation } from 'react-router-dom';
 
 const Layout = ({ children }) => {
@@ -24,6 +25,7 @@ const Layout = ({ children }) => {
         Skip to main content
       </a>
       <OfflineBanner />
+      <ServerWakeNotice />
       <Navbar />
       <main id="main-content" ref={mainRef} tabIndex={-1} className="flex-grow focus:outline-none">
         {children || <Outlet />}

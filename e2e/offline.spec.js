@@ -9,6 +9,18 @@ const waitForServiceWorker = (page) =>
         return !!navigator.serviceWorker.controller;
     });
 
+test('explains a slow (sleeping) backend instead of looking broken', async ({ page }) => {
+    // Simulate Render's free tier waking up: health check answers after 5 s
+    await page.route('http://localhost:5055/', async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await route.continue();
+    });
+    await page.goto('/');
+    const notice = page.getByText(/waking up the server/i);
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeHidden({ timeout: 10_000 });
+});
+
 test('app shell and doctor list still load with no network', async ({ page, context }) => {
     await page.goto('/doctors');
     await expect(page.getByText('Dr. Rahul Sharma')).toBeVisible();

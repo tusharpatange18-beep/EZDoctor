@@ -1,5 +1,8 @@
 # EZDoctor
 
+
+
+
 [![CI](https://github.com/tusharpatange18-beep/EZDoctor/actions/workflows/ci.yml/badge.svg)](https://github.com/tusharpatange18-beep/EZDoctor/actions/workflows/ci.yml)
 
 A full-stack emergency medical assistance web app for rural areas: one-tap SOS with GPS location, AI-assisted triage, automatic ambulance assignment, live tracking on a map, and doctor discovery with appointment booking.
@@ -7,6 +10,12 @@ A full-stack emergency medical assistance web app for rural areas: one-tap SOS w
 **Live demo:** [ezdoctor.vercel.app](https://ezdoctor.vercel.app)
 
 ---
+
+
+
+
+
+
 
 ## Features
 

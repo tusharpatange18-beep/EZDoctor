@@ -8,6 +8,10 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
+// Which Gemini model does the triage. A setting, because Google retires old models:
+// the previous one (gemini-1.5-flash) no longer appears in Google's model list.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
 // Status flow of an SOS request (same list as the Request model)
 const VALID_STATUSES = ['pending', 'accepted', 'on_the_way', 'arrived', 'completed'];
 
@@ -23,7 +27,7 @@ async function triage(type, symptoms) {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
         const prompt = `
 You are an AI emergency triage assistant. Analyze the following patient situation:
 Emergency Type: ${type || 'Not specified'}

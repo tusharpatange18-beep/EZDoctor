@@ -165,6 +165,7 @@ PORT=5000
 MONGO_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<dbname>
 JWT_SECRET=your_jwt_secret
 GEMINI_API_KEY=your_gemini_api_key   # optional; triage is skipped without it
+GEMINI_MODEL=gemini-3.5-flash-lite   # optional; model used for triage
 ```
 
 **Frontend (`.env`)**

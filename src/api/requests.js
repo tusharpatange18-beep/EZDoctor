@@ -20,8 +20,9 @@ export const createSOS = async (payload, token) => {
 };
 
 // ─── Requests ────────────────────────────────────
-export const fetchAllRequests = async () => {
-    const res = await fetch(`${API_BASE}/requests`);
+// Staff only: the server needs the doctor's or admin's login token
+export const fetchAllRequests = async (token) => {
+    const res = await fetch(`${API_BASE}/requests`, { headers: getHeaders(token) });
     if (!res.ok) {
         return []; // server error: show an empty list instead of crashing
     }

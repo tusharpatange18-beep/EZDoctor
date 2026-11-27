@@ -106,7 +106,7 @@ const DoctorDashboard = () => {
   // ── Initial fetch
   const loadRequests = () => {
     setPageLoading(true);
-    fetchAllRequests()
+    fetchAllRequests(token)
       .then(data => {
         // Only accept a list (anything else means the server answered something unexpected)
         if (Array.isArray(data)) {

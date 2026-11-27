@@ -63,8 +63,11 @@ test('an SOS made offline is queued and sent automatically on reconnect', async 
     await expect(page).toHaveURL(/\/track$/);
     await expect(page.getByRole('status').filter({ hasText: 'SOS status' })).toContainText('Waiting for ambulance');
 
-    // And it really reached the server
-    const all = await (await page.request.get(`${API}/requests`)).json();
-    expect(all.some(r => r.patientName === 'Offline Patient' && r.symptoms === 'High fever, no signal')).toBe(true);
+    // And it really reached the server (read through the public tracking endpoint;
+    // the full list is staff-only)
+    const requestId = await page.evaluate(() => sessionStorage.getItem('requestId'));
+    const saved = await (await page.request.get(`${API}/request/${requestId}`)).json();
+    expect(saved.patientName).toBe('Offline Patient');
+    expect(saved.symptoms).toBe('High fever, no signal');
     await context.close();
 });

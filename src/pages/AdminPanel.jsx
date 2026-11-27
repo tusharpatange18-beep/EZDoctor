@@ -5,6 +5,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import useSocket from '../hooks/useSocket';
 import upsertById from '../utils/upsertById';
 import { fetchAllRequests } from '../api/requests';
+import { useAuth } from '../context/AuthContext';
 
 /** "19.0760, 72.8770", or a dash when the request has no position. */
 function locationText(request) {
@@ -15,6 +16,7 @@ function locationText(request) {
 }
 
 const AdminPanel = () => {
+    const { token } = useAuth(); // the server only shows all requests to logged-in staff
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -31,7 +33,7 @@ const AdminPanel = () => {
     // Refresh button: show the spinner again, then reload
     const loadRequests = () => {
         setLoading(true);
-        fetchAllRequests()
+        fetchAllRequests(token)
             .then(saveRequests)
             .catch(() => {
                 // keep the old list; the table just stops loading
@@ -42,13 +44,13 @@ const AdminPanel = () => {
     // First load. `loading` already starts as true, so the effect must not set it again
     // (React's lint rule forbids setting state directly inside an effect).
     useEffect(() => {
-        fetchAllRequests()
+        fetchAllRequests(token)
             .then(saveRequests)
             .catch(() => {
                 // the table stays empty; the Refresh button can try again
             })
             .finally(() => setLoading(false));
-    }, []);
+    }, [token]); // load again if a different user logs in
 
     // Live updates: add the request if it's new, replace it if we already have it
     function onRequestChanged(updated) {

@@ -5,41 +5,80 @@ import StatusBadge from '../components/ui/StatusBadge';
 import useSocket from '../hooks/useSocket';
 import upsertById from '../utils/upsertById';
 import { fetchAllRequests } from '../api/requests';
+import { useAuth } from '../context/AuthContext';
+
+/** "19.0760, 72.8770", or a dash when the request has no position. */
+function locationText(request) {
+    if (!request.location || !request.location.lat) {
+        return '—';
+    }
+    return `${request.location.lat.toFixed(4)}, ${request.location.lng.toFixed(4)}`;
+}
 
 const AdminPanel = () => {
+    const { token } = useAuth(); // the server only shows all requests to logged-in staff
     const [requests, setRequests] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
 
-    const loadRequests = () => {
-        setLoading(true);
-        fetchAllRequests()
-            .then(data => {
-                setRequests(Array.isArray(data) ? data : []);
-                setLoading(false);
-            })
-            .catch(() => setLoading(false));
+    // Only accept a list (anything else means the server answered something unexpected)
+    const saveRequests = (data) => {
+        if (Array.isArray(data)) {
+            setRequests(data);
+        } else {
+            setRequests([]);
+        }
     };
 
-    useEffect(() => {
-        fetchAllRequests()
-            .then(data => setRequests(Array.isArray(data) ? data : []))
+    // Refresh button: show the spinner again, then reload
+    const loadRequests = () => {
+        setLoading(true);
+        fetchAllRequests(token)
+            .then(saveRequests)
+            .catch(() => {
+                // keep the old list; the table just stops loading
+            })
             .finally(() => setLoading(false));
-    }, []);
+    };
 
-    // Live updates via useSocket hook
+    // First load. `loading` already starts as true, so the effect must not set it again
+    // (React's lint rule forbids setting state directly inside an effect).
+    useEffect(() => {
+        fetchAllRequests(token)
+            .then(saveRequests)
+            .catch(() => {
+                // the table stays empty; the Refresh button can try again
+            })
+            .finally(() => setLoading(false));
+    }, [token]); // load again if a different user logs in
+
+    // Live updates: add the request if it's new, replace it if we already have it
+    function onRequestChanged(updated) {
+        setRequests(prev => upsertById(prev, updated));
+    }
     useSocket({
-        requestUpdate: (updated) => setRequests(prev => upsertById(prev, updated)),
-        locationUpdate: (updated) => setRequests(prev => upsertById(prev, updated)),
+        requestUpdate: onRequestChanged,
+        locationUpdate: onRequestChanged,
     });
 
+    // The rows shown in the table, for the chosen filter button
+    const filtered = [];
+    for (const request of requests) {
+        if (filter === 'all' || request.status === filter) {
+            filtered.push(request);
+        }
+    }
 
-    const filtered = filter === 'all' ? requests : requests.filter(r => r.status === filter);
-
-    const counts = Object.keys(STATUS_CONFIG).reduce((acc, key) => {
-        acc[key] = requests.filter(r => r.status === key).length;
-        return acc;
-    }, {});
+    // How many requests have each status, e.g. { pending: 3, completed: 5, ... }
+    const counts = {};
+    for (const status of Object.keys(STATUS_CONFIG)) {
+        counts[status] = 0;
+    }
+    for (const request of requests) {
+        if (counts[request.status] !== undefined) {
+            counts[request.status] = counts[request.status] + 1;
+        }
+    }
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-10">
@@ -127,9 +166,7 @@ const AdminPanel = () => {
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">
-                                            {req.location?.lat
-                                                ? `${req.location.lat.toFixed(4)}, ${req.location.lng.toFixed(4)}`
-                                                : '—'}
+                                            {locationText(req)}
                                         </td>
                                         <td className="px-4 py-3 text-gray-400 text-xs">
                                             {new Date(req.createdAt).toLocaleString()}

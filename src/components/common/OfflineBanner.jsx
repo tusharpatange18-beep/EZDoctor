@@ -17,9 +17,15 @@ const OfflineBanner = () => {
         if (!online) return;
         let cancelled = false;
         flushSOSQueue().then(({ sent }) => {
-            if (cancelled || !sent.length) return;
-            setNotice(`Back online: ${sent.length === 1 ? 'your saved SOS was' : `${sent.length} saved SOS requests were`} sent.`);
-            setTimeout(() => setNotice(''), 6000);
+            if (cancelled || sent.length === 0) {
+                return; // banner already gone, or nothing was waiting
+            }
+            let what = `${sent.length} saved SOS requests were`;
+            if (sent.length === 1) {
+                what = 'your saved SOS was';
+            }
+            setNotice(`Back online: ${what} sent.`);
+            setTimeout(() => setNotice(''), 6000); // hide the message after 6 seconds
         });
         return () => { cancelled = true; };
     }, [online]);

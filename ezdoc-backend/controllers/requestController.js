@@ -4,24 +4,31 @@ const { findNearest } = require('../utils/distance');
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// Default API Key check (to not crash if missing)
+// Without a key the app still works: SOS requests are simply saved without AI triage
 const apiKey = process.env.GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
-// ─────────────────────────────────────────────
-// 🚑 Create SOS Request  →  status: "pending"
-// ─────────────────────────────────────────────
-const createSOS = async (req, res) => {
+// Which Gemini model does the triage. A setting, because Google retires old models:
+// the previous one (gemini-1.5-flash) no longer appears in Google's model list.
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite';
+
+// Status flow of an SOS request (same list as the Request model)
+const VALID_STATUSES = ['pending', 'accepted', 'on_the_way', 'arrived', 'completed'];
+
+/**
+ * Asks Gemini how urgent the emergency sounds.
+ * Returns { level, label }. Any failure returns level 'none', so an AI problem
+ * never stops the SOS from being saved.
+ */
+async function triage(type, symptoms) {
+    const result = { level: 'none', label: '' };
+    if (!apiKey || (!symptoms && !type)) {
+        return result; // no key, or nothing to analyse
+    }
+
     try {
-        const { patientName, location, symptoms, type } = req.body;
-
-        let triageLevel = 'none';
-        let triageLabel = '';
-
-        if (apiKey && (symptoms || type)) {
-            try {
-                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-                const prompt = `
+        const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+        const prompt = `
 You are an AI emergency triage assistant. Analyze the following patient situation:
 Emergency Type: ${type || 'Not specified'}
 Symptoms: ${symptoms || 'Not specified'}
@@ -30,19 +37,30 @@ Classify the priority level as exactly one of: high, medium, low.
 Provide a short, urgent label (max 5-7 words) without quotes.
 Return only a JSON object like this: {"level": "high", "label": "🔴 HIGH PRIORITY - Possible cardiac event"}
 `;
-                const result = await model.generateContent(prompt);
-                const responseText = result.response.text();
-                // Extract json
-                const jsonMatch = responseText.match(/\{[\s\S]*?\}/);
-                if (jsonMatch) {
-                    const parsed = JSON.parse(jsonMatch[0]);
-                    triageLevel = parsed.level || 'medium';
-                    triageLabel = parsed.label || 'Evaluating priority...';
-                }
-            } catch (err) {
-                console.error("Gemini API Error:", err);
-            }
+        const response = await model.generateContent(prompt);
+        const responseText = response.response.text();
+
+        // The model may add text around the JSON: take the first {...} block
+        const jsonMatch = responseText.match(/\{[\s\S]*?\}/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            result.level = parsed.level || 'medium';
+            result.label = parsed.label || 'Evaluating priority...';
         }
+    } catch (err) {
+        console.error("Gemini API Error:", err);
+    }
+    return result;
+}
+
+// ─────────────────────────────────────────────
+// 🚑 Create SOS Request  →  status: "pending"
+// ─────────────────────────────────────────────
+const createSOS = async (req, res) => {
+    try {
+        const { patientName, location, symptoms, type } = req.body;
+
+        const triageInfo = await triage(type, symptoms);
 
         const request = new Request({
             patientName,
@@ -50,15 +68,15 @@ Return only a JSON object like this: {"level": "high", "label": "🔴 HIGH PRIOR
             symptoms,
             emergencyType: type,
             triageInfo: {
-                level: triageLevel,
-                label: triageLabel
+                level: triageInfo.level,
+                label: triageInfo.label
             },
             status: "pending"   // explicit, matches default
         });
 
         await request.save();
 
-        // Push the new SOS to every open doctor/admin dashboard immediately
+        // Push the new SOS to every open doctor/admin dashboard immediately (Socket.io)
         global.io.emit('requestUpdate', request);
 
         res.status(201).json(request);
@@ -72,28 +90,71 @@ Return only a JSON object like this: {"level": "high", "label": "🔴 HIGH PRIOR
 // ✅ Accept Request  →  status: "accepted"
 //    Assigns the geographically nearest available ambulance
 // ─────────────────────────────────────────────
+/**
+ * Takes the nearest free ambulance and marks it busy, in a way that is safe when two doctors
+ * accept at the same moment: the update only matches while the ambulance is still 'available',
+ * so only one of them can get it. Returns the ambulance, or null if none is free.
+ */
+async function claimNearestAmbulance(location) {
+    let freeAmbulances = await Ambulance.find({ status: 'available' });
+
+    while (freeAmbulances.length > 0) {
+        const nearest = findNearest(location, freeAmbulances);
+
+        // One database step: "set busy WHERE id = ... AND status = available"
+        const claimed = await Ambulance.findOneAndUpdate(
+            { _id: nearest._id, status: 'available' },
+            { status: 'busy' },
+            { new: true }
+        );
+        if (claimed) {
+            return claimed;
+        }
+
+        // Someone else took it a moment ago: try the next nearest one
+        const remaining = [];
+        for (const ambulance of freeAmbulances) {
+            if (!ambulance._id.equals(nearest._id)) {
+                remaining.push(ambulance);
+            }
+        }
+        freeAmbulances = remaining;
+    }
+    return null;
+}
+
 const acceptRequest = async (req, res) => {
     try {
-        const { doctorId } = req.body;
+        // The accepting doctor is whoever is logged in (never an id sent in the body)
+        const doctorId = req.user._id;
 
-        const request = await Request.findById(req.params.id);
-        if (!request) return res.status(404).json({ message: 'Request not found' });
+        // Claim the request: this only matches while it is still 'pending', so if two doctors
+        // press Accept at the same moment, exactly one of them gets it.
+        const request = await Request.findOneAndUpdate(
+            { _id: req.params.id, status: 'pending' },
+            { status: 'accepted', doctor: doctorId },
+            { new: true }
+        );
+        if (!request) {
+            // Either it doesn't exist, or someone already accepted it
+            const existing = await Request.findById(req.params.id);
+            if (!existing) {
+                return res.status(404).json({ message: 'Request not found' });
+            }
+            return res.status(409).json({ message: `Request is already ${existing.status}` });
+        }
 
-        const availableAmbulances = await Ambulance.find({ status: 'available' });
-        if (!availableAmbulances.length) {
+        const ambulance = await claimNearestAmbulance(request.location);
+        if (!ambulance) {
+            // Give the request back, so it can be accepted once an ambulance is free
+            request.status = 'pending';
+            request.doctor = undefined;
+            await request.save();
             return res.status(400).json({ message: 'No ambulance available' });
         }
 
-        // Use utility to find nearest ambulance
-        const nearestAmbulance = findNearest(request.location, availableAmbulances);
-
-        nearestAmbulance.status = 'busy';
-        await nearestAmbulance.save();
-
-        request.status = 'accepted';
-        request.doctor = doctorId;
-        request.ambulance = nearestAmbulance._id;
-        request.ambulanceLocation = nearestAmbulance.location;
+        request.ambulance = ambulance._id;
+        request.ambulanceLocation = ambulance.location;
         await request.save();
 
         global.io.emit('requestUpdate', request);
@@ -106,7 +167,7 @@ const acceptRequest = async (req, res) => {
 
 
 // ─────────────────────────────────────────────
-// 📋 Get all Requests
+// 📋 Get all Requests (with the doctor's details filled in)
 // ─────────────────────────────────────────────
 const getRequests = async (req, res) => {
     try {
@@ -134,21 +195,22 @@ const getRequestById = async (req, res) => {
     }
 };
 
-// ─────────────────────────────────────────────
-// 🗺️ Update Doctor/Ambulance Location
-//    accepted → on_the_way on first location ping
-// ─────────────────────────────────────────────
-const updateDoctorLocation = async (req, res) => {
+/**
+ * Shared by the doctor and the ambulance location endpoints.
+ * Saves the new position in `field` ('doctorLocation' or 'ambulanceLocation'),
+ * moves an "accepted" request to "on_the_way" on its first ping,
+ * and pushes the update to every open screen.
+ */
+async function saveLocation(req, res, field) {
     try {
         const { lat, lng } = req.body;
 
         const request = await Request.findById(req.params.id);
-
         if (!request) {
             return res.status(404).json({ message: "Request not found" });
         }
 
-        request.doctorLocation = { lat, lng };
+        request[field] = { lat, lng };
 
         // Auto-advance: accepted → on_the_way on first movement
         if (request.status === "accepted") {
@@ -164,38 +226,20 @@ const updateDoctorLocation = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
+}
+
+// ─────────────────────────────────────────────
+// 🗺️ Update Doctor Location
+// ─────────────────────────────────────────────
+const updateDoctorLocation = async (req, res) => {
+    return saveLocation(req, res, 'doctorLocation');
 };
 
 // ─────────────────────────────────────────────
 // 🚑 Update Ambulance Location
-//    accepted → on_the_way on first ping
 // ─────────────────────────────────────────────
 const updateAmbulanceLocation = async (req, res) => {
-    try {
-        const { lat, lng } = req.body;
-
-        const request = await Request.findById(req.params.id);
-
-        if (!request) {
-            return res.status(404).json({ message: "Request not found" });
-        }
-
-        request.ambulanceLocation = { lat, lng };
-
-        // Auto-advance: accepted → on_the_way
-        if (request.status === "accepted") {
-            request.status = "on_the_way";
-        }
-
-        await request.save();
-
-        // 🔥 Emit updated request with new status
-        global.io.emit("locationUpdate", request);
-
-        res.json(request);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    return saveLocation(req, res, 'ambulanceLocation');
 };
 
 // ─────────────────────────────────────────────
@@ -204,9 +248,8 @@ const updateAmbulanceLocation = async (req, res) => {
 const updateStatus = async (req, res) => {
     try {
         const { status } = req.body;
-        const validStatuses = ["pending", "accepted", "on_the_way", "arrived", "completed"];
 
-        if (!validStatuses.includes(status)) {
+        if (!VALID_STATUSES.includes(status)) {
             return res.status(400).json({ message: "Invalid status value" });
         }
 
@@ -219,7 +262,7 @@ const updateStatus = async (req, res) => {
         request.status = status;
         await request.save();
 
-        // Free ambulance when completed
+        // Free the ambulance when the job is done, so it can be sent to the next SOS
         if (status === "completed" && request.ambulance) {
             await Ambulance.findByIdAndUpdate(request.ambulance, { status: "available" });
         }

@@ -33,8 +33,13 @@ const Register = () => {
             login(data.token, data.user);
             showToast('Account created! Redirecting...', 'success');
 
+            // Doctors go to their dashboard, patients to the home page
+            let nextPage = '/home';
+            if (data.user.role === 'doctor') {
+                nextPage = '/doctor-dashboard';
+            }
             setTimeout(() => {
-                navigate(data.user.role === 'doctor' ? '/doctor-dashboard' : '/home');
+                navigate(nextPage);
             }, 800);
         } catch {
             setError('Server error. Please try again.');

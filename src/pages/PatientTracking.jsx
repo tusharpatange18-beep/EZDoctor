@@ -79,7 +79,12 @@ const PatientTracking = () => {
     const [requestId] = useState(() => sessionStorage.getItem('requestId'));
     const [request, setRequest] = useState(null);
     const [loading, setLoading] = useState(!!requestId);
-    const [error, setError] = useState(requestId ? null : 'No SOS request found. Please submit an SOS first.');
+    // No saved request id means the user opened this page without sending an SOS first
+    let firstError = null;
+    if (!requestId) {
+        firstError = 'No SOS request found. Please submit an SOS first.';
+    }
+    const [error, setError] = useState(firstError);
 
     useEffect(() => {
         if (!requestId) return;

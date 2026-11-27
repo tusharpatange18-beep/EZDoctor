@@ -8,7 +8,9 @@ const { MongoMemoryServer } = require('mongodb-memory-server-core');
 const PORT = process.env.E2E_API_PORT || 5055;
 
 (async () => {
-    const mongo = await MongoMemoryServer.create();
+    // The default 10 s start limit is too short on a busy laptop (e.g. while OneDrive syncs);
+    // allow up to 2 minutes so a slow start is not reported as a test failure.
+    const mongo = await MongoMemoryServer.create({ instance: { launchTimeout: 120_000 } });
     process.env.MONGO_URI = mongo.getUri('ezdoc-e2e');
     process.env.PORT = String(PORT);
     process.env.JWT_SECRET = 'e2e-secret';

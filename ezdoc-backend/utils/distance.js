@@ -1,8 +1,17 @@
 const EARTH_RADIUS_KM = 6371;
 
-const toRadians = (deg) => (deg * Math.PI) / 180;
+/** Degrees -> radians (Math.sin and Math.cos work in radians). */
+function toRadians(degrees) {
+    return (degrees * Math.PI) / 180;
+}
 
-const hasCoords = (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lng);
+/** True if the point has real numbers for both lat and lng. */
+function hasCoords(point) {
+    if (!point) {
+        return false;
+    }
+    return Number.isFinite(point.lat) && Number.isFinite(point.lng);
+}
 
 /**
  * Great-circle distance between two lat/lng points (Haversine formula).
@@ -12,15 +21,21 @@ const hasCoords = (p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lng);
  * @param {{ lat: number, lng: number }} b
  * @returns {number} distance in kilometres
  */
-const haversineDistance = (a, b) => {
-    if (!hasCoords(a) || !hasCoords(b)) return Infinity;
+function haversineDistance(a, b) {
+    if (!hasCoords(a) || !hasCoords(b)) {
+        return Infinity;
+    }
     const dLat = toRadians(b.lat - a.lat);
     const dLng = toRadians(b.lng - a.lng);
-    const h =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRadians(a.lat)) * Math.cos(toRadians(b.lat)) * Math.sin(dLng / 2) ** 2;
+
+    const sinHalfDLat = Math.sin(dLat / 2);
+    const sinHalfDLng = Math.sin(dLng / 2);
+    const h = sinHalfDLat * sinHalfDLat
+        + Math.cos(toRadians(a.lat)) * Math.cos(toRadians(b.lat)) * sinHalfDLng * sinHalfDLng;
+
+    // h is the "haversine" of the angle between the points; asin turns it back into the angle
     return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
-};
+}
 
 /**
  * Find the nearest item from a list based on location.
@@ -28,12 +43,22 @@ const haversineDistance = (a, b) => {
  * @param {Array<{ location: { lat: number, lng: number } }>} items
  * @returns nearest item or null
  */
-const findNearest = (targetLocation, items) => {
-    if (!items || items.length === 0) return null;
-    return items.reduce((nearest, item) => {
-        const d = haversineDistance(targetLocation, item.location);
-        return d < haversineDistance(targetLocation, nearest.location) ? item : nearest;
-    }, items[0]);
-};
+function findNearest(targetLocation, items) {
+    if (!items || items.length === 0) {
+        return null;
+    }
+
+    // Start with the first item, then keep whichever is closer
+    let nearest = items[0];
+    let nearestDistance = haversineDistance(targetLocation, nearest.location);
+    for (const item of items) {
+        const distance = haversineDistance(targetLocation, item.location);
+        if (distance < nearestDistance) {
+            nearest = item;
+            nearestDistance = distance;
+        }
+    }
+    return nearest;
+}
 
 module.exports = { haversineDistance, findNearest };

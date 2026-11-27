@@ -29,8 +29,13 @@ const register = async (req, res) => {
             return res.status(409).json({ message: 'Email already registered' });
         }
 
-        // Self-registration can only create patients or doctors; admins are created manually
-        const safeRole = ['patient', 'doctor'].includes(role) ? role : 'patient';
+        // Self-registration can only create patients or doctors; admins are created manually.
+        // Any other role sent by the client (e.g. "admin") is ignored.
+        let safeRole = 'patient';
+        if (role === 'patient' || role === 'doctor') {
+            safeRole = role;
+        }
+        // The User model hashes the password before saving (see models/User.js)
         const user = await User.create({ name, email, password, role: safeRole });
 
         const token = generateToken(user._id, user.role);
@@ -66,6 +71,7 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid email or password' });
         }
 
+        // bcrypt compares the typed password with the stored hash
         const isMatch = await user.matchPassword(password);
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid email or password' });
@@ -93,8 +99,10 @@ const login = async (req, res) => {
 // ─────────────────────────────────────────────
 const getMe = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password');
-        if (!user) return res.status(404).json({ message: 'User not found' });
+        const user = await User.findById(req.user.id).select('-password'); // never send the hash
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
         res.json(user);
     } catch (error) {
         res.status(500).json({ message: error.message });

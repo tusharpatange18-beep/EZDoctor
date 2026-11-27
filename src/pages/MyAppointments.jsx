@@ -5,6 +5,19 @@ import { useAuth } from '../context/AuthContext';
 import { useToast, ToastContainer } from '../components/common/Toast';
 import { API_BASE } from '../constants/status';
 
+/** A new list where the appointment with this id is replaced by `item` (React needs a new list to redraw). */
+function replaceById(list, id, item) {
+    const result = [];
+    for (const current of list) {
+        if (current._id === id) {
+            result.push(item);
+        } else {
+            result.push(current);
+        }
+    }
+    return result;
+}
+
 const MyAppointments = () => {
     const { token } = useAuth();
     const { showToast, toasts, removeToast } = useToast();
@@ -33,31 +46,64 @@ const MyAppointments = () => {
         }
     };
 
+    /** Marks one Cancel button busy or free (copying the object: React state must not be changed in place). */
+    const markCancelling = (id, value) => {
+        setCancelling(previous => {
+            const next = { ...previous };
+            next[id] = value;
+            return next;
+        });
+    };
+
     const handleCancel = async (id) => {
-        if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
-        
+        if (!window.confirm('Are you sure you want to cancel this appointment?')) {
+            return;
+        }
+
         // Optimistic: mark cancelled immediately, restore the original if the server fails
-        const original = appointments.find(app => app._id === id);
-        setAppointments(prev => prev.map(app => app._id === id ? { ...app, status: 'cancelled' } : app));
-        setCancelling(prev => ({ ...prev, [id]: true }));
+        let original = null;
+        for (const app of appointments) {
+            if (app._id === id) {
+                original = app;
+            }
+        }
+        const cancelledCopy = { ...original, status: 'cancelled' };
+        setAppointments(prev => replaceById(prev, id, cancelledCopy));
+        markCancelling(id, true);
+
         try {
             const res = await fetch(`${API_BASE}/appointments/${id}/cancel`, {
                 method: 'PATCH',
                 headers: { Authorization: `Bearer ${token}` }
             });
             const data = await res.json();
-            
-            if (!res.ok) throw new Error(data.message || 'Failed to cancel');
-            
-            setAppointments(prev => prev.map(app => app._id === id ? data.appointment : app));
+
+            if (!res.ok) {
+                throw new Error(data.message || 'Failed to cancel');
+            }
+
+            // Use the server's version of the appointment
+            setAppointments(prev => replaceById(prev, id, data.appointment));
             showToast('Appointment cancelled successfully', 'success');
         } catch (err) {
-            setAppointments(prev => prev.map(app => app._id === id ? original : app));
-            showToast(err instanceof TypeError ? 'No connection. Your appointment is still booked.' : err.message, 'error');
+            // Undo the optimistic change
+            setAppointments(prev => replaceById(prev, id, original));
+            // fetch throws a TypeError when there is no network at all
+            let message = err.message;
+            if (err instanceof TypeError) {
+                message = 'No connection. Your appointment is still booked.';
+            }
+            showToast(message, 'error');
         } finally {
-            setCancelling(prev => ({ ...prev, [id]: false }));
+            markCancelling(id, false);
         }
     };
+
+    // Exactly one of these four blocks is shown
+    const showLoading = loading;
+    const showError = !loading && Boolean(error);
+    const showEmpty = !loading && !error && appointments.length === 0;
+    const showList = !loading && !error && appointments.length > 0;
 
     return (
         <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -70,12 +116,13 @@ const MyAppointments = () => {
                     </p>
                 </div>
 
-                {loading ? (
+                {showLoading && (
                     <div className="text-center py-20">
                         <div className="w-10 h-10 border-4 border-gray-200 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
                         <p className="text-sm font-medium text-gray-500">Loading appointments...</p>
                     </div>
-                ) : error ? (
+                )}
+                {showError && (
                     <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-red-200">
                         <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
                         <p className="text-lg font-bold text-gray-700">Could not load appointments</p>
@@ -84,7 +131,8 @@ const MyAppointments = () => {
                             Try Again
                         </button>
                     </div>
-                ) : appointments.length === 0 ? (
+                )}
+                {showEmpty && (
                     <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200">
                         <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-lg font-bold text-gray-700">No appointments found</p>
@@ -93,18 +141,21 @@ const MyAppointments = () => {
                             <Search className="w-4 h-4" aria-hidden="true" /> Find a Doctor
                         </Link>
                     </div>
-                ) : (
+                )}
+                {showList && (
                     <div className="space-y-4">
                         {appointments.map(appointment => {
                             const isCancelled = appointment.status === 'cancelled';
-                            const docName = appointment.doctorId?.name || 'Unknown Doctor';
+                            // doctorId is "populated" by the server: it holds the doctor's details (or null if deleted)
+                            const doctor = appointment.doctorId || {};
+                            const docName = doctor.name || 'Unknown Doctor';
 
                             return (
                                 <div key={appointment._id} className={`bg-white rounded-2xl p-5 md:p-6 shadow-sm border flex flex-col md:flex-row md:items-center justify-between gap-6 transition-all hover:shadow-md ${isCancelled ? 'border-gray-200 opacity-75 grayscale' : 'border-l-4 border-l-red-500'}`}>
                                     <div className="flex gap-4">
                                         <div className={`w-14 h-14 rounded-2xl text-xl flex items-center justify-center border flex-shrink-0 overflow-hidden ${isCancelled ? 'bg-gray-50 border-gray-200 text-gray-400' : 'bg-red-50 border-red-100 text-red-500'}`}>
-                                            {appointment.doctorId?.photo && appointment.doctorId.photo.startsWith('http') ? (
-                                                <img src={appointment.doctorId.photo} alt={docName} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                                            {doctor.photo && doctor.photo.startsWith('http') ? (
+                                                <img src={doctor.photo} alt={docName} width={56} height={56} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                                             ) : (
                                                 <User className="w-7 h-7" />
                                             )}
@@ -122,7 +173,7 @@ const MyAppointments = () => {
                                                     <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 border border-blue-200 rounded-full font-bold uppercase tracking-wide">Upcoming</span>
                                                 )}
                                             </h3>
-                                            <p className="text-sm text-gray-500 mt-0.5 font-medium">{appointment.doctorId?.specialization || 'Specialist'}</p>
+                                            <p className="text-sm text-gray-500 mt-0.5 font-medium">{doctor.specialization || 'Specialist'}</p>
                                             
                                             <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-sm text-gray-600">
                                                 <div className="flex items-center gap-1.5">
@@ -135,7 +186,7 @@ const MyAppointments = () => {
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
                                                     <MapPin className="w-4 h-4 text-gray-400" />
-                                                    <span>{appointment.doctorId?.location || 'Clinic'}</span>
+                                                    <span>{doctor.location || 'Clinic'}</span>
                                                 </div>
                                             </div>
                                             

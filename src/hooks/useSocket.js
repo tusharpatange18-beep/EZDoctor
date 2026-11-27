@@ -25,8 +25,11 @@ const useSocket = (handlers = {}) => {
             socketRef.current.on(event, handler);
         });
 
+        // React runs this when the page closes: drop the live connection
         return () => {
-            socketRef.current?.disconnect();
+            if (socketRef.current) {
+                socketRef.current.disconnect();
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);

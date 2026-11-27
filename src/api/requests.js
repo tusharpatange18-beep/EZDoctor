@@ -1,9 +1,13 @@
 import { API_BASE } from '../constants/status';
 
-const getHeaders = (token) => ({
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-});
+/** JSON headers, plus the login token when there is one. */
+function getHeaders(token) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+    return headers;
+}
 
 // ─── SOS ─────────────────────────────────────────
 export const createSOS = async (payload, token) => {
@@ -18,7 +22,10 @@ export const createSOS = async (payload, token) => {
 // ─── Requests ────────────────────────────────────
 export const fetchAllRequests = async () => {
     const res = await fetch(`${API_BASE}/requests`);
-    return res.ok ? res.json() : [];
+    if (!res.ok) {
+        return []; // server error: show an empty list instead of crashing
+    }
+    return res.json();
 };
 
 export const fetchRequestById = async (id) => {

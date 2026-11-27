@@ -17,7 +17,13 @@ const PROGRESS_COLORS = {
     warning: 'bg-amber-500',
 };
 
-const capitalize = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '');
+/** "error" -> "Error" (empty text stays empty). */
+function capitalize(text) {
+    if (!text) {
+        return '';
+    }
+    return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 // ─────────────────────────────────────────────────────
 // Single Toast item

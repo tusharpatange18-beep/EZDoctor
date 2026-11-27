@@ -17,7 +17,15 @@ const dbPromise = () =>
 export const saveDoctors = async (doctors) =>
     (await dbPromise()).put('kv', { doctors, savedAt: Date.now() }, 'doctors');
 
-export const loadDoctors = async () => (await dbPromise()).get('kv', 'doctors') ?? null;
+/** The saved { doctors, savedAt }, or null if nothing was saved yet. */
+export const loadDoctors = async () => {
+    const db = await dbPromise();
+    const saved = await db.get('kv', 'doctors');
+    if (saved === undefined) {
+        return null;
+    }
+    return saved;
+};
 
 // ── Offline SOS queue ────────────────────────────
 export const enqueueSOS = async (payload, token) =>

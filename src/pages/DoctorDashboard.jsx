@@ -18,26 +18,110 @@ const Spinner = () => (
   </svg>
 );
 
+// ── Small helpers (plain functions, so the component below stays readable)
+
+/** A new list where the item with this id is replaced by `item` (React needs a new list to redraw). */
+function replaceById(list, id, item) {
+  const result = [];
+  for (const current of list) {
+    if (current._id === id) {
+      result.push(item);
+    } else {
+      result.push(current);
+    }
+  }
+  return result;
+}
+
+/** How many requests have one of the given statuses. */
+function countWithStatus(requests, statuses) {
+  let count = 0;
+  for (const request of requests) {
+    if (statuses.includes(request.status)) {
+      count = count + 1;
+    }
+  }
+  return count;
+}
+
+/** Colours, label and icon for a status (unknown statuses look like "pending"). */
+function statusConfig(status) {
+  if (STATUS_CONFIG[status]) {
+    return STATUS_CONFIG[status];
+  }
+  return STATUS_CONFIG.pending;
+}
+
+/** True if the request has a GPS position. */
+function hasLocation(request) {
+  return Boolean(request.location && request.location.lat);
+}
+
+/** "Asha Rao" -> "AR" (at most 2 letters). */
+function initialsOf(name) {
+  let initials = '';
+  for (const word of (name || 'P').split(' ')) {
+    initials = initials + word[0];
+  }
+  return initials.toUpperCase().slice(0, 2);
+}
+
+/** Badge colours for the AI triage level: red (high), orange (medium), yellow (low). */
+function triageClass(level) {
+  if (level === 'high') {
+    return 'bg-red-600 text-white shadow-red-200 animate-pulse';
+  }
+  if (level === 'medium') {
+    return 'bg-orange-500 text-white shadow-orange-200';
+  }
+  return 'bg-yellow-400 text-gray-900 shadow-yellow-200';
+}
+
+/** "19.0760, 72.8770", or a message when there is no position. */
+function locationText(request) {
+  if (!hasLocation(request)) {
+    return 'No location data';
+  }
+  return `${request.location.lat.toFixed(4)}, ${request.location.lng.toFixed(4)}`;
+}
+
 const DoctorDashboard = () => {
   const { user, token } = useAuth();
   const { showToast, toasts, removeToast } = useToast();
 
   const [requests, setRequests] = useState([]);
   const [pageLoading, setPageLoading] = useState(true);
+  // Which buttons are busy, e.g. { "abc123": "accepting", "abc123_arrived": true }
   const [updating, setUpdating] = useState({});
+
+  /** Marks one button busy or free. Copies the object, because React state must not be changed in place. */
+  const markUpdating = (key, value) => {
+    setUpdating(previous => {
+      const next = { ...previous };
+      next[key] = value;
+      return next;
+    });
+  };
 
   // ── Initial fetch
   const loadRequests = () => {
     setPageLoading(true);
     fetchAllRequests()
-      .then(data => setRequests(Array.isArray(data) ? data : []))
+      .then(data => {
+        // Only accept a list (anything else means the server answered something unexpected)
+        if (Array.isArray(data)) {
+          setRequests(data);
+        } else {
+          setRequests([]);
+        }
+      })
       .catch(() => showToast({ title: 'Error', message: 'Failed to load requests', type: 'error' }))
       .finally(() => setPageLoading(false));
   };
 
   useEffect(() => { loadRequests(); }, []); // eslint-disable-line
 
-  // ── Live socket updates
+  // ── Live socket updates: add the request if it's new, replace it if we already have it
   useSocket({
     locationUpdate: (updated) => {
       setRequests(prev => upsertById(prev, updated));
@@ -45,41 +129,54 @@ const DoctorDashboard = () => {
     requestUpdate: (updated) => {
       setRequests(prev => upsertById(prev, updated));
       const cfg = STATUS_CONFIG[updated.status];
-      if (cfg) showToast({
-        title: `Status Updated`,
-        message: `${updated.patientName} → ${cfg.label}`,
-        type: 'info',
-      });
+      if (cfg) {
+        showToast({
+          title: `Status Updated`,
+          message: `${updated.patientName} → ${cfg.label}`,
+          type: 'info',
+        });
+      }
     },
   });
 
   // ── Accept request
   const handleAcceptRequest = async (id, patientName) => {
-    setUpdating(p => ({ ...p, [id]: 'accepting' }));
-    const { ok, data } = await apiAcceptRequest(id, user?._id || 'doc', token);
+    markUpdating(id, 'accepting');
+    let doctorId = 'doc';
+    if (user && user._id) {
+      doctorId = user._id;
+    }
+    const { ok, data } = await apiAcceptRequest(id, doctorId, token);
     if (ok) {
-      setRequests(prev => prev.map(r => r._id === id ? data : r));
+      setRequests(prev => replaceById(prev, id, data));
       showToast({ title: 'Request Accepted', message: `Ambulance assigned to ${patientName}`, type: 'success' });
       simulateDoctorMovement(id);
     } else {
-      showToast({ title: 'Error', message: data?.message || 'Could not accept request', type: 'error' });
+      let message = 'Could not accept request';
+      if (data && data.message) {
+        message = data.message; // e.g. "No ambulance available"
+      }
+      showToast({ title: 'Error', message: message, type: 'error' });
     }
-    setUpdating(p => ({ ...p, [id]: null }));
+    markUpdating(id, null);
   };
 
   // ── Update status (arrived / completed)
   const handleUpdateStatus = async (id, status) => {
     const key = `${id}_${status}`;
-    setUpdating(p => ({ ...p, [key]: true }));
+    markUpdating(key, true);
     const { ok, data } = await updateRequestStatus(id, status, token);
     if (ok) {
-      setRequests(prev => prev.map(r => r._id === id ? data : r));
-      const cfg = STATUS_CONFIG[status];
-      showToast({ title: `${cfg?.label || status}`, type: 'success' });
+      setRequests(prev => replaceById(prev, id, data));
+      let title = status;
+      if (STATUS_CONFIG[status]) {
+        title = STATUS_CONFIG[status].label;
+      }
+      showToast({ title: title, type: 'success' });
     } else {
       showToast({ title: 'Update Failed', message: 'Could not update status', type: 'error' });
     }
-    setUpdating(p => ({ ...p, [key]: false }));
+    markUpdating(key, false);
   };
 
   // ── Simulate ambulance movement (demo)
@@ -164,9 +261,45 @@ const DoctorDashboard = () => {
     return null;
   };
 
-  const pendingCount   = requests.filter(r => r.status === 'pending').length;
-  const activeCount    = requests.filter(r => ['accepted', 'on_the_way', 'arrived'].includes(r.status)).length;
-  const completedCount = requests.filter(r => r.status === 'completed').length;
+  const pendingCount   = countWithStatus(requests, ['pending']);
+  const activeCount    = countWithStatus(requests, ['accepted', 'on_the_way', 'arrived']);
+  const completedCount = countWithStatus(requests, ['completed']);
+
+  let doctorName = 'Doctor';
+  if (user && user.name) {
+    doctorName = user.name;
+  }
+
+  // Centre the map on the first request with a position (Mumbai if there is none)
+  let mapCenter = [19.076, 72.877];
+  if (requests.length > 0 && hasLocation(requests[0])) {
+    mapCenter = [requests[0].location.lat, requests[0].location.lng];
+  }
+
+  // The cards area shows one of three things: loading, empty, or the cards
+  let cardsArea;
+  if (pageLoading) {
+    cardsArea = (
+      <div className="text-center py-20 text-gray-400">
+        <div className="w-10 h-10 border-4 border-gray-200 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm font-medium">Loading requests...</p>
+      </div>
+    );
+  } else if (requests.length === 0) {
+    cardsArea = (
+      <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
+        <Stethoscope className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <p className="text-xl font-bold text-gray-700">No active requests</p>
+        <p className="text-sm text-gray-500 mt-2">New SOS requests will appear here in real-time</p>
+      </div>
+    );
+  } else {
+    cardsArea = (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {requests.map(request => renderCard(request))}
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10">
@@ -177,7 +310,7 @@ const DoctorDashboard = () => {
         <div>
           <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight">Doctor Dashboard</h1>
           <p className="text-gray-500 mt-1 text-sm">
-            Welcome, <span className="font-semibold text-gray-700">Dr. {user?.name || 'Doctor'}</span> — manage incoming emergencies
+            Welcome, <span className="font-semibold text-gray-700">Dr. {doctorName}</span> — manage incoming emergencies
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -217,16 +350,17 @@ const DoctorDashboard = () => {
       {/* ── MAP */}
       <div className="h-[360px] w-full mb-10 rounded-2xl overflow-hidden shadow-md border border-gray-200" role="region" aria-label="Map of SOS requests">
         <MapContainer
-          center={requests.length && requests[0].location?.lat
-            ? [requests[0].location.lat, requests[0].location.lng]
-            : [19.076, 72.877]}
+          center={mapCenter}
           zoom={12}
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+          {/* One pin per request that has a position */}
           {requests.map(req => {
-            if (!req.location?.lat) return null;
-            const cfg = STATUS_CONFIG[req.status] || STATUS_CONFIG.pending;
+            if (!hasLocation(req)) {
+              return null;
+            }
+            const cfg = statusConfig(req.status);
             return (
               <Marker key={req._id} position={[req.location.lat, req.location.lng]}>
                 <Popup>
@@ -240,104 +374,94 @@ const DoctorDashboard = () => {
       </div>
 
       {/* ── REQUEST CARDS */}
-      {pageLoading ? (
-        <div className="text-center py-20 text-gray-400">
-          <div className="w-10 h-10 border-4 border-gray-200 border-t-red-500 rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-sm font-medium">Loading requests...</p>
-        </div>
-      ) : requests.length === 0 ? (
-        <div className="text-center py-24 bg-white rounded-2xl border border-dashed border-gray-200">
-          <Stethoscope className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-xl font-bold text-gray-700">No active requests</p>
-          <p className="text-sm text-gray-500 mt-2">New SOS requests will appear here in real-time</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {requests.map(request => {
-            const cfg = STATUS_CONFIG[request.status] || STATUS_CONFIG.pending;
-            const initials = (request.patientName || 'P')
-              .split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
-
-            return (
-              <article
-                key={request._id}
-                aria-label={`SOS from ${request.patientName}`}
-                className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 flex flex-col transition-all hover:shadow-md ${cfg.border}`}
-              >
-                {/* Card header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${cfg.dot}`}>
-                      {initials}
-                    </div>
-                    <div>
-                      <h2 className="text-base font-bold text-gray-900 leading-tight">{request.patientName}</h2>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {new Date(request.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5">
-                    <span className="px-2 py-0.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-full font-bold tracking-wide">SOS</span>
-                    {request.triageInfo && request.triageInfo.level !== 'none' && (
-                      <div 
-                        className={`text-[10px] font-bold px-2 py-1 rounded shadow-sm text-right w-32 leading-tight ${
-                          request.triageInfo.level === 'high' ? 'bg-red-600 text-white shadow-red-200 animate-pulse' :
-                          request.triageInfo.level === 'medium' ? 'bg-orange-500 text-white shadow-orange-200' :
-                          'bg-yellow-400 text-gray-900 shadow-yellow-200'
-                        }`}
-                        title={request.triageInfo.label}
-                      >
-                        AI: {request.triageInfo.label || `${request.triageInfo.level} priority`}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Status badge */}
-                <div className="mb-4">
-                  <StatusBadge status={request.status} size="md" />
-                </div>
-
-                {/* Details */}
-                <div className="space-y-2 mb-5 flex-grow text-xs text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                    <span>
-                      {request.location?.lat
-                        ? `${request.location.lat.toFixed(4)}, ${request.location.lng.toFixed(4)}`
-                        : 'No location data'}
-                    </span>
-                  </div>
-                  {request.symptoms && (
-                    <div className="flex items-start gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 italic mt-2">
-                      <span className="font-semibold text-gray-600 non-italic flex-shrink-0">Symptoms:</span>
-                      <span className="line-clamp-2">{request.symptoms}</span>
-                    </div>
-                  )}
-                  {request.ambulance && (
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>Ambulance assigned</span>
-                    </div>
-                  )}
-                  {request.doctor && (
-                    <div className="flex items-center gap-2">
-                      <Users className="w-3.5 h-3.5 flex-shrink-0" />
-                      <span>Doctor assigned</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action */}
-                <div className="flex gap-2">{renderActions(request)}</div>
-              </article>
-            );
-          })}
-        </div>
-      )}
+      {cardsArea}
     </div>
   );
+
+  // ── One request card (a function declaration, so it can be used above before this line)
+  function renderCard(request) {
+    const cfg = statusConfig(request.status);
+    const initials = initialsOf(request.patientName);
+
+    // The AI triage badge is shown only when the AI gave a level
+    const triage = request.triageInfo;
+    const showTriage = Boolean(triage) && triage.level !== 'none';
+    let triageText = '';
+    if (showTriage) {
+      triageText = triage.label;
+      if (!triageText) {
+        triageText = `${triage.level} priority`;
+      }
+    }
+
+    return (
+      <article
+        key={request._id}
+        aria-label={`SOS from ${request.patientName}`}
+        className={`bg-white rounded-2xl p-5 shadow-sm border-l-4 flex flex-col transition-all hover:shadow-md ${cfg.border}`}
+      >
+        {/* Card header */}
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${cfg.dot}`}>
+              {initials}
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900 leading-tight">{request.patientName}</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {new Date(request.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className="px-2 py-0.5 text-xs bg-red-50 text-red-600 border border-red-200 rounded-full font-bold tracking-wide">SOS</span>
+            {showTriage && (
+              <div
+                className={`text-[10px] font-bold px-2 py-1 rounded shadow-sm text-right w-32 leading-tight ${triageClass(triage.level)}`}
+                title={triage.label}
+              >
+                AI: {triageText}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Status badge */}
+        <div className="mb-4">
+          <StatusBadge status={request.status} size="md" />
+        </div>
+
+        {/* Details */}
+        <div className="space-y-2 mb-5 flex-grow text-xs text-gray-500">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+            <span>{locationText(request)}</span>
+          </div>
+          {request.symptoms && (
+            <div className="flex items-start gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100 italic mt-2">
+              <span className="font-semibold text-gray-600 non-italic flex-shrink-0">Symptoms:</span>
+              <span className="line-clamp-2">{request.symptoms}</span>
+            </div>
+          )}
+          {request.ambulance && (
+            <div className="flex items-center gap-2 text-blue-600">
+              <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Ambulance assigned</span>
+            </div>
+          )}
+          {request.doctor && (
+            <div className="flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 flex-shrink-0" />
+              <span>Doctor assigned</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action */}
+        <div className="flex gap-2">{renderActions(request)}</div>
+      </article>
+    );
+  }
 };
 
 export default DoctorDashboard;

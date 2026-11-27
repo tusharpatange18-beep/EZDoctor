@@ -7,7 +7,61 @@ import { STATUS_STEPS } from '../constants/status';
 import { fetchRequestById } from '../api/requests';
 import useSocket from '../hooks/useSocket';
 
-const stepIndex = (status) => STATUS_STEPS.findIndex(s => s.key === status);
+/** Position of a status in the progress bar (0 = pending), or -1 if unknown. */
+function stepIndex(status) {
+    for (let i = 0; i < STATUS_STEPS.length; i++) {
+        if (STATUS_STEPS[i].key === status) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/** CSS classes for a step's circle: finished steps green, the current step highlighted, later steps grey. */
+function circleClass(step, done, active) {
+    if (done) {
+        return 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-200';
+    }
+    if (active) {
+        return `${step.bg} ${step.color} border-current scale-110 shadow-lg`;
+    }
+    return 'bg-white border-gray-200 text-gray-300';
+}
+
+/** Text colour for a step's label. */
+function labelClass(step, done, active) {
+    if (active) {
+        return step.color;
+    }
+    if (done) {
+        return 'text-emerald-600';
+    }
+    return 'text-gray-400';
+}
+
+/** The rows of the Request Details card. The Ambulance row appears only once one is assigned. */
+function detailRows(request, currentStep) {
+    let locationText = '—';
+    if (request && request.location && request.location.lat) {
+        locationText = `${request.location.lat.toFixed(4)}, ${request.location.lng.toFixed(4)}`;
+    }
+    let patientName = undefined;
+    let createdAt = undefined;
+    if (request) {
+        patientName = request.patientName;
+        createdAt = request.createdAt;
+    }
+
+    const rows = [];
+    rows.push({ label: 'Patient', value: patientName });
+    rows.push({ label: 'Status', value: currentStep.label, color: currentStep.color });
+    rows.push({ label: 'Location', value: locationText });
+    if (request && request.ambulance) {
+        rows.push({ label: 'Ambulance', value: 'Assigned', color: 'text-blue-600' });
+    }
+    rows.push({ label: 'Submitted', value: new Date(createdAt).toLocaleString() });
+    return rows;
+}
 
 const StepIcon = ({ stepKey, className }) => {
     switch(stepKey) {
@@ -41,16 +95,16 @@ const PatientTracking = () => {
             });
     }, [requestId]);
 
-    // Live socket updates
+    // Live socket updates: the server broadcasts every request; keep only ours
+    function onRequestChanged(updated) {
+        const myRequestId = sessionStorage.getItem('requestId');
+        if (updated._id === myRequestId) {
+            setRequest(updated);
+        }
+    }
     useSocket({
-        locationUpdate: (updated) => {
-            const requestId = sessionStorage.getItem('requestId');
-            if (updated._id === requestId) setRequest(updated);
-        },
-        requestUpdate: (updated) => {
-            const requestId = sessionStorage.getItem('requestId');
-            if (updated._id === requestId) setRequest(updated);
-        },
+        locationUpdate: onRequestChanged, // the ambulance moved
+        requestUpdate: onRequestChanged,  // the status changed
     });
 
     // ── Loading screen
@@ -86,8 +140,23 @@ const PatientTracking = () => {
         );
     }
 
-    const currentIdx  = request ? stepIndex(request.status) : 0;
-    const currentStep = STATUS_STEPS[currentIdx] || STATUS_STEPS[0];
+    // Which step of the progress bar we are on (unknown status -> first step)
+    let currentIdx = 0;
+    if (request) {
+        currentIdx = stepIndex(request.status);
+    }
+    let currentStep = STATUS_STEPS[currentIdx];
+    if (!currentStep) {
+        currentStep = STATUS_STEPS[0];
+    }
+
+    // The map needs the patient's position; the ambulance pin needs the doctor's position
+    const hasPatientLocation = Boolean(request && request.location && request.location.lat);
+    const hasAmbulanceLocation = Boolean(request && request.doctorLocation && request.doctorLocation.lat);
+    let patientName = undefined;
+    if (request) {
+        patientName = request.patientName;
+    }
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -102,7 +171,7 @@ const PatientTracking = () => {
                         <h1 className={`text-lg font-extrabold ${currentStep.color}`}>
                             <span className="sr-only">SOS status: </span>{currentStep.label}
                         </h1>
-                        <p className="text-sm text-gray-500 mt-0.5">Patient: <span className="font-medium">{request?.patientName}</span></p>
+                        <p className="text-sm text-gray-500 mt-0.5">Patient: <span className="font-medium">{patientName}</span></p>
                     </div>
                     {/* Live indicator */}
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/60 rounded-full text-xs font-semibold text-gray-600 border border-white/80">
@@ -134,19 +203,14 @@ const PatientTracking = () => {
                                     )}
                                     {/* Circle */}
                                     <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm border-2 transition-all
-                                        ${done
-                                            ? 'bg-emerald-500 border-emerald-500 text-white shadow-md shadow-emerald-200'
-                                            : active
-                                                ? `${step.bg} ${step.color} border-current scale-110 shadow-lg`
-                                                : 'bg-white border-gray-200 text-gray-300'
-                                        }`}
+                                        ${circleClass(step, done, active)}`}
                                     >
                                         {done ? '✓' : <StepIcon stepKey={step.key} className="w-4 h-4" />}
                                     </div>
                                 </div>
                                 {/* Label */}
                                 <p className={`text-xs text-center mt-1 font-semibold leading-tight px-1
-                                    ${active ? step.color : done ? 'text-emerald-600' : 'text-gray-400'}`}
+                                    ${labelClass(step, done, active)}`}
                                 >
                                     {step.label}
                                     {done && <span className="sr-only"> (done)</span>}
@@ -158,7 +222,7 @@ const PatientTracking = () => {
             </div>
 
             {/* ── Map */}
-            {request?.location?.lat && (
+            {hasPatientLocation && (
                 <div className="h-[45vh] w-full shadow-inner border-y border-gray-200" role="region" aria-label="Live map of patient and ambulance location">
                     <MapContainer
                         center={[request.location.lat, request.location.lng]}
@@ -173,7 +237,7 @@ const PatientTracking = () => {
                         </Marker>
 
                         {/* Ambulance pin (moves in real-time) */}
-                        {request.doctorLocation?.lat && (
+                        {hasAmbulanceLocation && (
                             <Marker position={[request.doctorLocation.lat, request.doctorLocation.lng]}>
                                 <Popup>Ambulance en route</Popup>
                             </Marker>
@@ -189,15 +253,7 @@ const PatientTracking = () => {
                         Request Details
                     </h2>
                     <div className="space-y-3">
-                        {[
-                            { label: 'Patient',   value: request?.patientName },
-                            { label: 'Status',    value: currentStep.label, color: currentStep.color },
-                            { label: 'Location',  value: request?.location?.lat
-                                ? `${request.location.lat.toFixed(4)}, ${request.location.lng.toFixed(4)}`
-                                : '—' },
-                            ...(request?.ambulance ? [{ label: 'Ambulance', value: 'Assigned', color: 'text-blue-600' }] : []),
-                            { label: 'Submitted', value: new Date(request?.createdAt).toLocaleString() },
-                        ].map(row => (
+                        {detailRows(request, currentStep).map(row => (
                             <div key={row.label} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
                                 <span className="text-xs text-gray-500 font-medium">{row.label}</span>
                                 <span className={`text-sm font-semibold ${row.color || 'text-gray-800'}`}>{row.value}</span>

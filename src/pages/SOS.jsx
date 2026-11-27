@@ -12,8 +12,14 @@ const SOS = () => {
   const { user, token } = useAuth();
   const { showToast, toasts, removeToast } = useToast();
 
+  // Logged-in users get their name filled in
+  let defaultName = "";
+  if (user && user.name) {
+    defaultName = user.name;
+  }
+
   const [formData, setFormData] = useState({
-    name: user?.name || "",
+    name: defaultName,
     phone: "",
     type: "Accident",
     symptoms: "",
@@ -66,7 +72,12 @@ const SOS = () => {
       location = await getLocation();
       showToast(`Location found: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`, "success", 2000);
     } catch (error) {
-      showToast(error.code === 1 ? "Location access denied. Please allow GPS." : "Could not get your location. Please try again.", "error");
+      // Geolocation error code 1 = the user (or browser) refused permission
+      let message = "Could not get your location. Please try again.";
+      if (error.code === 1) {
+        message = "Location access denied. Please allow GPS.";
+      }
+      showToast(message, "error");
       setLoading(false);
       return;
     }
@@ -102,7 +113,7 @@ const SOS = () => {
 
       setTimeout(() => navigate("/track"), 1200);
 
-      setFormData({ name: user?.name || "", phone: "", type: "Accident", symptoms: "" });
+      setFormData({ name: defaultName, phone: "", type: "Accident", symptoms: "" }); // clear the form
     } catch {
       // fetch throws only on network failure
       await queueForLater();

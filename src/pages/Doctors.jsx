@@ -10,6 +10,9 @@ const API = import.meta.env.VITE_API_BASE;
 // ─── Specialization filter list ───────────────────────────────
 const SPECIALIZATIONS = ['All', 'Cardiologist', 'General Physician', 'Dentist', 'Neurologist', 'Orthopedic', 'Pediatrician'];
 
+// Keys for the 6 placeholder cards shown while the list loads
+const SKELETON_KEYS = [0, 1, 2, 3, 4, 5];
+
 // ─── Time slots ───────────────────────────────────────────────
 const TIME_SLOTS = [
     '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM',
@@ -124,15 +127,25 @@ const BookingModal = ({ doctor, token, onClose, onSuccess }) => {
     const onCloseRef = useRef(onClose);
     onCloseRef.current = onClose;
 
-    // Move focus into the dialog, close on Escape, return focus on close
+    // Move focus into the dialog, close on Escape, return focus on close (keyboard + screen-reader users)
     useEffect(() => {
-        const previouslyFocused = document.activeElement;
-        dialogRef.current?.focus();
-        const onKey = (e) => { if (e.key === 'Escape') onCloseRef.current(); };
+        const previouslyFocused = document.activeElement; // remember where the user was
+        if (dialogRef.current) {
+            dialogRef.current.focus();
+        }
+        function onKey(e) {
+            if (e.key === 'Escape') {
+                onCloseRef.current();
+            }
+        }
         document.addEventListener('keydown', onKey);
+
+        // React runs this when the dialog closes
         return () => {
             document.removeEventListener('keydown', onKey);
-            previouslyFocused?.focus?.();
+            if (previouslyFocused && previouslyFocused.focus) {
+                previouslyFocused.focus(); // put focus back on the button that opened the dialog
+            }
         };
     }, []);
 
@@ -333,17 +346,26 @@ const Doctors = () => {
     // ── Fetch available doctors
     useEffect(() => {
         fetch(`${API}/doctors`)
-            .then(res => { if (!res.ok) throw new Error('Failed to load doctors'); return res.json(); })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Failed to load doctors');
+                }
+                return res.json();
+            })
             .then(data => {
-                const list = Array.isArray(data) ? data : [];
+                let list = [];
+                if (Array.isArray(data)) {
+                    list = data;
+                }
                 setDoctors(list);
                 setLoading(false);
-                saveDoctors(list).catch(() => {}); // keep a copy for offline use
+                saveDoctors(list).catch(() => {}); // keep a copy for offline use (errors don't matter here)
             })
             .catch(async err => {
                 // Offline or server down: fall back to the last list we saved
                 const saved = await loadDoctors().catch(() => null);
-                if (saved?.doctors?.length) {
+                const hasSavedDoctors = Boolean(saved && saved.doctors && saved.doctors.length > 0);
+                if (hasSavedDoctors) {
                     setDoctors(saved.doctors);
                     setSavedAt(saved.savedAt);
                 } else {
@@ -353,26 +375,48 @@ const Doctors = () => {
             });
     }, []);
 
-    // ── Filter logic
-    const filtered = useMemo(() => doctors.filter(d => {
-        const matchSpec   = activeSpec === 'All' || d.specialization === activeSpec;
-        const matchSearch = !search || [d.name, d.specialization, d.location || '']
-            .some(f => f.toLowerCase().includes(search.toLowerCase()));
-        return matchSpec && matchSearch;
-    }), [doctors, activeSpec, search]);
+    // ── Filter logic: the speciality chip AND the search box must both match.
+    // useMemo: only recalculate when the list, the chip or the search text changes.
+    const filtered = useMemo(() => {
+        const searchText = search.toLowerCase();
+        const result = [];
+        for (const d of doctors) {
+            const matchSpec = activeSpec === 'All' || d.specialization === activeSpec;
+
+            // The search text may appear in the name, the speciality or the city
+            let matchSearch = !search;
+            for (const field of [d.name, d.specialization, d.location || '']) {
+                if (field.toLowerCase().includes(searchText)) {
+                    matchSearch = true;
+                }
+            }
+
+            if (matchSpec && matchSearch) {
+                result.push(d);
+            }
+        }
+        return result;
+    }, [doctors, activeSpec, search]);
 
     // ── Open booking modal (guard: must be logged in)
     const handleBook = (doctor) => {
-        if (!isAuth) { navigate('/login'); return; }
+        if (!isAuth) {
+            navigate('/login');
+            return;
+        }
         setSelectedDoctor(doctor);
     };
 
     // ── Called after successful booking API call
     const handleBooked = (appointment) => {
         console.log('✅ Appointment saved:', appointment);
+        let doctorName = undefined;
+        if (selectedDoctor) {
+            doctorName = selectedDoctor.name;
+        }
         showToast({
             title: 'Appointment Booked!',
-            message: `${selectedDoctor?.name} · ${appointment.date} ${appointment.time}`,
+            message: `${doctorName} · ${appointment.date} ${appointment.time}`,
             type: 'success',
             duration: 5000,
         });
@@ -442,7 +486,8 @@ const Doctors = () => {
                 {/* ── Skeletons */}
                 {loading && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
+                        {/* 6 grey placeholder cards while loading */}
+                        {SKELETON_KEYS.map(key => <SkeletonCard key={key} />)}
                     </div>
                 )}
 

@@ -26,11 +26,18 @@ const ProtectedRoute = ({ children, role }) => {
     if (!isAuth) return <Navigate to="/login" replace />;
 
     // Get role from context (preferred) or sessionStorage fallback
-    const userRole = user?.role || sessionStorage.getItem('role');
+    let userRole = sessionStorage.getItem('role');
+    if (user && user.role) {
+        userRole = user.role;
+    }
 
+    // Admins may open every page; everyone else only pages for their own role
     if (role && userRole !== role && userRole !== 'admin') {
         // Wrong role: send them to their correct home
-        const fallback = userRole === 'doctor' ? '/doctor-dashboard' : '/home';
+        let fallback = '/home';
+        if (userRole === 'doctor') {
+            fallback = '/doctor-dashboard';
+        }
         return <Navigate to={fallback} replace />;
     }
 

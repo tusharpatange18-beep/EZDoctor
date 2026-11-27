@@ -14,8 +14,14 @@ const Layout = ({ children }) => {
   // and screen-reader users start at the top of the page that just loaded,
   // instead of wherever the element they activated used to be.
   useEffect(() => {
-    if (firstRender.current) { firstRender.current = false; return; }
-    mainRef.current?.focus();
+    // Not on the very first page load: only when the user moves to another page
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (mainRef.current) {
+      mainRef.current.focus();
+    }
     window.scrollTo(0, 0);
   }, [pathname]);
 

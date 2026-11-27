@@ -9,14 +9,17 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout, isAuth } = useAuth();
 
+  // "Home", "How It Works" and "Features" are sections of the home page
   const handleScroll = (id) => {
     if (location.pathname !== '/') {
-      window.location.href = `/#${id}`;
+      window.location.href = `/#${id}`; // on another page: go to the home page section
     } else {
       const element = document.getElementById(id);
-      if (element) element.scrollIntoView({ behavior: 'smooth' });
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
     }
-    setIsOpen(false);
+    setIsOpen(false); // close the mobile menu
   };
 
   const handleLogout = () => {
@@ -24,7 +27,20 @@ const Navbar = () => {
     navigate('/login');
   };
 
-  const roleLabel = user?.role === 'doctor' ? 'Doctor' : user?.role === 'admin' ? 'Admin' : 'Patient';
+  // Read the logged-in user's role and name once (both empty when logged out)
+  let role = undefined;
+  let userName = undefined;
+  if (user) {
+    role = user.role;
+    userName = user.name;
+  }
+
+  let roleLabel = 'Patient';
+  if (role === 'doctor') {
+    roleLabel = 'Doctor';
+  } else if (role === 'admin') {
+    roleLabel = 'Admin';
+  }
 
   return (
     <nav aria-label="Main" className="sticky top-0 z-50 bg-white shadow-sm w-full">
@@ -51,15 +67,15 @@ const Navbar = () => {
                 {/* Role chip */}
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 rounded-full text-sm font-medium text-gray-700">
                   <User className="w-3.5 h-3.5" />
-                  <span>{user?.name}</span>
+                  <span>{userName}</span>
                   <span className="text-xs text-gray-400">· {roleLabel}</span>
                 </div>
 
                 {/* Dashboard link */}
-                {user?.role === 'doctor' && (
+                {role === 'doctor' && (
                   <Link to="/doctor-dashboard" className="text-sm font-semibold text-blue-600 hover:underline">Dashboard</Link>
                 )}
-                {user?.role === 'patient' && (
+                {role === 'patient' && (
                   <>
                     <Link to="/my-appointments" className="text-sm font-semibold text-gray-600 hover:text-red-500 hover:underline">Appointments</Link>
                     <Link to="/sos" className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-full font-semibold text-sm transition-colors shadow-md flex items-center gap-1.5">
@@ -67,7 +83,7 @@ const Navbar = () => {
                     </Link>
                   </>
                 )}
-                {user?.role === 'admin' && (
+                {role === 'admin' && (
                   <Link to="/admin" className="text-sm font-semibold text-purple-600 hover:underline">Admin Panel</Link>
                 )}
 
@@ -115,8 +131,8 @@ const Navbar = () => {
 
             {isAuth ? (
               <>
-                <div className="px-3 py-2 text-sm text-gray-500">{roleLabel} — {user?.name}</div>
-                {user?.role === 'patient' && (
+                <div className="px-3 py-2 text-sm text-gray-500">{roleLabel} — {userName}</div>
+                {role === 'patient' && (
                   <>
                     <Link to="/my-appointments" onClick={() => setIsOpen(false)} className="block px-3 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 font-medium rounded-md text-sm">My Appointments</Link>
                     <Link to="/sos" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-red-600 text-white rounded-md font-medium text-sm text-center mt-1">
@@ -124,7 +140,7 @@ const Navbar = () => {
                     </Link>
                   </>
                 )}
-                {user?.role === 'doctor' && (
+                {role === 'doctor' && (
                   <Link to="/doctor-dashboard" onClick={() => setIsOpen(false)} className="block px-3 py-2 bg-blue-500 text-white rounded-md font-medium text-sm text-center">
                     Dashboard
                   </Link>

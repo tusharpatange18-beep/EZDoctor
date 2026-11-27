@@ -86,30 +86,71 @@ const createSOS = async (req, res) => {
 // ✅ Accept Request  →  status: "accepted"
 //    Assigns the geographically nearest available ambulance
 // ─────────────────────────────────────────────
-const acceptRequest = async (req, res) => {
-    try {
-        const { doctorId } = req.body;
+/**
+ * Takes the nearest free ambulance and marks it busy, in a way that is safe when two doctors
+ * accept at the same moment: the update only matches while the ambulance is still 'available',
+ * so only one of them can get it. Returns the ambulance, or null if none is free.
+ */
+async function claimNearestAmbulance(location) {
+    let freeAmbulances = await Ambulance.find({ status: 'available' });
 
-        const request = await Request.findById(req.params.id);
-        if (!request) {
-            return res.status(404).json({ message: 'Request not found' });
+    while (freeAmbulances.length > 0) {
+        const nearest = findNearest(location, freeAmbulances);
+
+        // One database step: "set busy WHERE id = ... AND status = available"
+        const claimed = await Ambulance.findOneAndUpdate(
+            { _id: nearest._id, status: 'available' },
+            { status: 'busy' },
+            { new: true }
+        );
+        if (claimed) {
+            return claimed;
         }
 
-        const availableAmbulances = await Ambulance.find({ status: 'available' });
-        if (availableAmbulances.length === 0) {
+        // Someone else took it a moment ago: try the next nearest one
+        const remaining = [];
+        for (const ambulance of freeAmbulances) {
+            if (!ambulance._id.equals(nearest._id)) {
+                remaining.push(ambulance);
+            }
+        }
+        freeAmbulances = remaining;
+    }
+    return null;
+}
+
+const acceptRequest = async (req, res) => {
+    try {
+        // The accepting doctor is whoever is logged in (never an id sent in the body)
+        const doctorId = req.user._id;
+
+        // Claim the request: this only matches while it is still 'pending', so if two doctors
+        // press Accept at the same moment, exactly one of them gets it.
+        const request = await Request.findOneAndUpdate(
+            { _id: req.params.id, status: 'pending' },
+            { status: 'accepted', doctor: doctorId },
+            { new: true }
+        );
+        if (!request) {
+            // Either it doesn't exist, or someone already accepted it
+            const existing = await Request.findById(req.params.id);
+            if (!existing) {
+                return res.status(404).json({ message: 'Request not found' });
+            }
+            return res.status(409).json({ message: `Request is already ${existing.status}` });
+        }
+
+        const ambulance = await claimNearestAmbulance(request.location);
+        if (!ambulance) {
+            // Give the request back, so it can be accepted once an ambulance is free
+            request.status = 'pending';
+            request.doctor = undefined;
+            await request.save();
             return res.status(400).json({ message: 'No ambulance available' });
         }
 
-        // The closest free ambulance to the patient (see utils/distance.js)
-        const nearestAmbulance = findNearest(request.location, availableAmbulances);
-
-        nearestAmbulance.status = 'busy';
-        await nearestAmbulance.save();
-
-        request.status = 'accepted';
-        request.doctor = doctorId;
-        request.ambulance = nearestAmbulance._id;
-        request.ambulanceLocation = nearestAmbulance.location;
+        request.ambulance = ambulance._id;
+        request.ambulanceLocation = ambulance.location;
         await request.save();
 
         global.io.emit('requestUpdate', request);
